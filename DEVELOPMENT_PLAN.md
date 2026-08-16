@@ -37,6 +37,28 @@
 
 ## 次の優先順位(未着手)
 
+### Phase 2a: プレイヤー新技（次フェーズ・実装仕様）
+
+実装はデザイン側（別環境）で行い、Drive共有リンク経由で受け渡す。こちら側は取得・検証・コミットを担当する。
+
+追加する技:
+- [ ] アッパーカット（キー L）: 上昇する拳。dmg 15 / リーチ 105 / dur 0.42s / ノックバック大。地上限定
+- [ ] 突進技（キー I）: 前方高速ダッシュで経路上の敵をまとめて命中。dmg 13 / リーチ 120 / dur 0.34s。地上限定
+
+実装要件（デザイン側へ）:
+- PLAYER_ATTACKS 配列へ2エントリ追加（`uppercut` / `dashstrike`）。既存4エントリは変更しない
+- Input クラスに `special1Pressed` / `special2Pressed` を追加し、`KeyL` / `KeyI` で設定。`consumeFrame()`・`reset()` にも反映
+- Game.update() で `special1Pressed` / `special2Pressed` を検知して `player.startSpecial(0/1)` を呼ぶ
+- Player に `startSpecial(i)` を新設。地上時のみ発動。`dashstrike` は攻撃中 vx = facing * 480 相当の高速移動
+- スマホ: touch-ui に `data-action="special1"` / `"special2"` ボタンを攻撃・ジャンプの右側に追加。`bindTouchBtn` を拡張
+- タイトル画面の controls-grid に L / I の説明行を追記
+- 敵の打ち上げ物理は今回含めない（大きめのノックバックで代替）
+
+検証基準（こちら側）:
+- 構文チェック（`node --check`）→ smoke2.js → lever.js が全て Pass
+- 新技の動作確認: 地上で L → アッパーカット、地上で I → 前進ダッシュ。空中・状態中は無効
+- スマホ実機で新ボタンのマルチタッチ確認
+
 ### Phase 2: 戦闘の厚み
 - [ ] プレイヤーの攻撃バリエーション追加(アッパー・突進・ガード等)
 - [ ] 新たな敵種の追加
