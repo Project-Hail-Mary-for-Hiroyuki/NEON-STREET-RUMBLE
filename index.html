@@ -412,12 +412,14 @@
     box-shadow: 0 0 8px rgba(200,180,255,0.9);
   }
 
-  /* ---- 左側のアクションボタン(ジャンプ・攻撃) ---- */
-  #stick .b-jump, #stick .b-atk {
+  /* ---- アクションボタン: 右親指で自然に届く独立した大きめの領域 ---- */
+  #touch-ui .b-jump, #touch-ui .b-atk {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
     touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
     border-radius: 50%;
     font-family: inherit;
     text-align: center;
@@ -427,26 +429,26 @@
     backdrop-filter: blur(1px);
     -webkit-backdrop-filter: blur(1px);
   }
-  #stick .b-jump:active, #stick .b-atk:active { filter: brightness(1.5); }
-  /* 攻撃: レバーの真下(左手親指で届く位置) */
-  #stick .b-atk {
-    left: 50%;
-    top: calc(100% + 12px);
-    transform: translateX(-50%);
-    width: 80px; height: 80px;
-    font-size: 15px;
+  #touch-ui .b-jump:active, #touch-ui .b-atk:active,
+  #touch-ui .b-jump.active, #touch-ui .b-atk.active { filter: brightness(1.55); transform: scale(0.94); }
+  /* 攻撃は最大の右下ボタン、ジャンプは少し上に置き誤タップを減らす */
+  #touch-ui .b-atk {
+    right: max(18px, env(safe-area-inset-right, 0px));
+    bottom: max(22px, env(safe-area-inset-bottom, 0px));
+    width: 92px; height: 92px;
+    font-size: 17px;
+    font-weight: bold;
     color: #ffd9a8;
     border: 2px solid rgba(255,160,90,0.6);
     background: rgba(60,24,16,0.45);
     box-shadow: 0 0 12px rgba(255,140,60,0.3);
   }
-  /* ジャンプ: レバーの真上(誤操作しないよう少し離す) */
-  #stick .b-jump {
-    left: 50%;
-    bottom: calc(100% + 12px);
-    transform: translateX(-50%);
-    width: 60px; height: 60px;
-    font-size: 12px;
+  #touch-ui .b-jump {
+    right: max(94px, calc(env(safe-area-inset-right, 0px) + 88px));
+    bottom: max(91px, calc(env(safe-area-inset-bottom, 0px) + 76px));
+    width: 70px; height: 70px;
+    font-size: 13px;
+    font-weight: bold;
     color: #a8ffd9;
     border: 2px solid rgba(120,255,190,0.5);
     background: rgba(16,40,30,0.45);
@@ -474,9 +476,13 @@
     }
     canvas#game { object-fit: contain; }
     #copy-code-btn { top: calc(8px + env(safe-area-inset-top, 0px)); }
-    #stick { left: 16px; bottom: calc(108px + env(safe-area-inset-bottom, 0px)); width: 170px; height: 170px; }
-    #stick .b-atk { width: 80px; height: 80px; font-size: 16px; }
-    #stick .b-jump { width: 56px; height: 56px; font-size: 13px; }
+    /* 縦持ちでは下部を操作帯にし、中央のゲーム画面を指で隠しにくくする */
+    #stick { left: max(14px, env(safe-area-inset-left, 0px)); bottom: max(22px, env(safe-area-inset-bottom, 0px)); width: 166px; height: 166px; }
+    #stick-zone { inset: -22px; }
+    #touch-ui .b-atk { width: 94px; height: 94px; font-size: 17px; }
+    #touch-ui .b-jump { width: 72px; height: 72px; font-size: 13px; }
+    #hud { transform: scale(0.88); transform-origin: top left; width: 112%; }
+    #combo-hud { top: 72px; right: 12px; }
     #mute-note { display: none; }
   }
 
@@ -612,9 +618,9 @@
           <div id="stick-zone"></div>
           <div id="stick-base"></div>
           <div id="stick-knob"></div>
-          <button class="b-jump" data-action="jump">ジャンプ</button>
-          <button class="b-atk" data-action="attack">攻撃</button>
         </div>
+        <button class="b-jump" data-action="jump" aria-label="ジャンプ">ジャンプ</button>
+        <button class="b-atk" data-action="attack" aria-label="攻撃">攻撃</button>
       </div>
 
       <!-- Title -->
@@ -751,14 +757,20 @@ if (isTouch) touchUI.classList.add("show");
 /* アクションボタン(攻撃・ジャンプ): 各入力を独立したPointerとして管理し、
    レバー操作中でも別の指で押せるようにする */
 function bindTouchBtn(btn, kind) {
+  let activePointer = null;
   const on = e => {
+    if (activePointer !== null) return;
     e.preventDefault();
+    activePointer = e.pointerId;
+    try { btn.setPointerCapture(e.pointerId); } catch (err) {}
     btn.classList.add("active");
     if (kind === "attack") { input.attackHeld = true; input.attackPressed = true; }
     else if (kind === "jump") { input.jumpHeld = true; input.jumpPressed = true; }
   };
   const off = e => {
+    if (activePointer !== e.pointerId) return;
     e.preventDefault();
+    activePointer = null;
     btn.classList.remove("active");
     if (kind === "attack") input.attackHeld = false;
     else if (kind === "jump") input.jumpHeld = false;
@@ -766,7 +778,7 @@ function bindTouchBtn(btn, kind) {
   btn.addEventListener("pointerdown", on);
   btn.addEventListener("pointerup", off);
   btn.addEventListener("pointercancel", off);
-  btn.addEventListener("pointerleave", off);
+  btn.addEventListener("lostpointercapture", off);
 }
 document.querySelectorAll("#touch-ui button[data-action]").forEach(b => bindTouchBtn(b, b.dataset.action));
 
@@ -797,13 +809,19 @@ function stickNeutral() {
   input.left = false; input.right = false;
   input.back = false; input.front = false;
 }
-/* 中心付近のデッドゾーンで揺れによる誤入力を防ぎ、斜め入力にも対応 */
+/* 半径ベースのデッドゾーンとヒステリシスで、親指の微振動を移動にしない */
 function applyStick(dx, dy) {
-  const dead = Math.max(11, stickRange * 0.22);
-  input.right = dx > dead;
-  input.left = dx < -dead;
-  input.back = dy < -dead;
-  input.front = dy > dead;
+  const dist = Math.hypot(dx, dy);
+  const enterDead = Math.max(14, stickRange * 0.26);
+  const exitDead = Math.max(10, stickRange * 0.18);
+  const wasMoving = input.left || input.right || input.back || input.front;
+  if (dist < (wasMoving ? exitDead : enterDead)) return stickNeutral();
+  const nx = dx / Math.max(dist, 1), ny = dy / Math.max(dist, 1);
+  const axis = 0.38; /* 軽い斜め入力は水平／垂直を優先して安定化 */
+  input.right = nx > axis;
+  input.left = nx < -axis;
+  input.back = ny < -axis;
+  input.front = ny > axis;
 }
 function releaseStick(e) {
   if (stickPointer !== e.pointerId) return;
@@ -852,6 +870,8 @@ stickZone.addEventListener("pointermove", e => {
 });
 stickZone.addEventListener("pointerup", releaseStick);
 stickZone.addEventListener("pointercancel", releaseStick);
+addEventListener("blur", () => { input.reset(); stickPointer = null; stickTx = stickTy = 0; setKnob(0, 0); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { input.reset(); stickPointer = null; stickTx = stickTy = 0; setKnob(0, 0); } });
 
 /* タイトル画面はタップで開始 */
 touchUI.addEventListener("pointerdown", e => { if (game && game.state === "title") game.start(); }, { passive: true });
@@ -1390,25 +1410,35 @@ function drawStick(o) {
   ctx.scale(facing * scale, scale);
 
   const B = {
-    headR: isRobot ? 11 : 9, neck: 3,
-    torso: isRobot ? 36 : 32,
-    upperArm: 15, lowerArm: 14, thigh: 16, shin: 16
+    headR: isHero ? 11 : (isRobot ? 11 : 9), neck: 4,
+    torso: isRobot ? 35 : 31,
+    shoulderHalf: isRobot ? 6 : 5, hipHalf: isRobot ? 5 : 4,
+    upperArm: 16, lowerArm: 15, thigh: 18, shin: 18
   };
   const L = a => ({ x: Math.sin(a), y: Math.cos(a) });
-  const foot = (a, bend) => {
+  const leg = (a, bend, origin) => {
     const p1 = L(a);
-    const jx = p1.x * B.thigh, jy = p1.y * B.thigh;
+    const jx = origin.x + p1.x * B.thigh, jy = origin.y + p1.y * B.thigh;
     const a2 = a - bend;
     return { jx, jy, tx: jx + Math.sin(a2) * B.shin, ty: jy + Math.cos(a2) * B.shin };
   };
-  const fA = foot(pose.legFA, pose.legFB);
-  const fB = foot(pose.legBA, pose.legBB);
-  const hipY = -Math.max(fA.ty, fB.ty);
+  /* 足裏を地面にそろえ、骨盤をその上へ置く。左右の腰から脚を分ける。 */
+  const rawFA = leg(pose.legFA, pose.legFB, { x: B.hipHalf, y: 0 });
+  const rawBA = leg(pose.legBA, pose.legBB, { x: -B.hipHalf, y: 0 });
+  const hipY = -Math.max(rawFA.ty, rawBA.ty);
+  const hipF = { x: B.hipHalf, y: hipY };
+  const hipB = { x: -B.hipHalf, y: hipY };
+  const fA = leg(pose.legFA, pose.legFB, hipF);
+  const fB = leg(pose.legBA, pose.legBB, hipB);
   const lean = pose.lean;
-  const shoulder = { x: Math.sin(lean) * B.torso, y: hipY + Math.cos(lean) * B.torso };
+  /* 重要: 胴体は腰から上へ伸ばす。これで頭・胴・脚が明確な人型になる。 */
+  const hip = { x: 0, y: hipY };
+  const shoulder = { x: hip.x - Math.sin(lean) * B.torso, y: hip.y - Math.cos(lean) * B.torso };
+  const shoulderF = { x: shoulder.x + B.shoulderHalf, y: shoulder.y };
+  const shoulderB = { x: shoulder.x - B.shoulderHalf, y: shoulder.y };
   const headC = {
-    x: shoulder.x + Math.sin(lean) * B.neck,
-    y: shoulder.y + Math.cos(lean) * B.neck - B.headR * 0.35
+    x: shoulder.x - Math.sin(lean) * (B.neck + B.headR * 0.45),
+    y: shoulder.y - Math.cos(lean) * (B.neck + B.headR * 0.45)
   };
   const arm = (a, bend, origin) => {
     const p1 = L(a);
@@ -1416,8 +1446,8 @@ function drawStick(o) {
     const a2 = a - bend;
     return { jx, jy, tx: jx + Math.sin(a2) * B.lowerArm, ty: jy + Math.cos(a2) * B.lowerArm };
   };
-  const aF = arm(pose.armFA, pose.armFB, shoulder);
-  const aB = arm(pose.armBA, pose.armBB, shoulder);
+  const aF = arm(pose.armFA, pose.armFB, shoulderF);
+  const aB = arm(pose.armBA, pose.armBB, shoulderB);
 
   const lw = isRobot ? 7 : 5;
   ctx.lineCap = "round";
@@ -1425,11 +1455,11 @@ function drawStick(o) {
 
   /* 各部位のパスをまとめて扱い、輪郭(黒) → 本体色の順で描く */
   const segs = {
-    backArm: [[shoulder.x, shoulder.y], [aB.jx, aB.jy], [aB.tx, aB.ty]],
-    torso: [[0, hipY], [shoulder.x, shoulder.y]],
-    frontLeg: [[0, hipY], [fA.jx, fA.jy], [fA.tx, fA.ty]],
-    backLeg: [[0, hipY], [fB.jx, fB.jy], [fB.tx, fB.ty]],
-    frontArm: [[shoulder.x, shoulder.y], [aF.jx, aF.jy], [aF.tx, aF.ty]]
+    backArm: [[shoulderB.x, shoulderB.y], [aB.jx, aB.jy], [aB.tx, aB.ty]],
+    torso: [[hip.x, hip.y], [shoulder.x, shoulder.y]],
+    frontLeg: [[hipF.x, hipF.y], [fA.jx, fA.jy], [fA.tx, fA.ty]],
+    backLeg: [[hipB.x, hipB.y], [fB.jx, fB.jy], [fB.tx, fB.ty]],
+    frontArm: [[shoulderF.x, shoulderF.y], [aF.jx, aF.jy], [aF.tx, aF.ty]]
   };
   const strokeLimb = (seg, style, w) => {
     ctx.strokeStyle = style;
@@ -1447,8 +1477,10 @@ function drawStick(o) {
 
   /* 後ろの腕 */
   strokeLimb(segs.backArm, shade(color, isRobot ? 0.75 : 0.6), lw);
-  /* 胴体 */
-  strokeLimb(segs.torso, color, lw + 1);
+  /* 肩幅・胴・骨盤を描き、一本線ではない読みやすい人体シルエットにする */
+  strokeLimb([[shoulderB.x, shoulderB.y], [shoulderF.x, shoulderF.y]], shade(color, 0.9), lw + 1);
+  strokeLimb(segs.torso, color, lw + 3);
+  strokeLimb([[hipB.x, hipB.y], [hipF.x, hipF.y]], shade(color, 0.82), lw + 1);
   /* 脚 */
   strokeLimb(segs.frontLeg, shade(color, 1), lw);
   strokeLimb(segs.backLeg, shade(color, isRobot ? 0.72 : 0.82), lw);
@@ -1457,8 +1489,8 @@ function drawStick(o) {
 
   /* ロボット: 胸部装甲プレートと肩パッド */
   if (isRobot) {
-    const cx = shoulder.x * 0.45;
-    const cy = (hipY + shoulder.y) * 0.58;
+    const cx = (hip.x + shoulder.x) * 0.5;
+    const cy = (hip.y + shoulder.y) * 0.5;
     ctx.fillStyle = "#8a93a3";
     ctx.strokeStyle = "#242a36";
     ctx.lineWidth = 2;
@@ -1518,7 +1550,7 @@ function drawStick(o) {
     ctx.fillStyle = jointColor;
     ctx.shadowColor = jointColor;
     ctx.shadowBlur = robot ? 12 : 6;
-    for (const [jx, jy] of [[0, hipY], [shoulder.x, shoulder.y], [fA.jx, fA.jy], [fB.jx, fB.jy], [aF.jx, aF.jy], [aB.jx, aB.jy]]) {
+    for (const [jx, jy] of [[hip.x, hip.y], [shoulder.x, shoulder.y], [fA.jx, fA.jy], [fB.jx, fB.jy], [aF.jx, aF.jy], [aB.jx, aB.jy]]) {
       ctx.beginPath();
       ctx.arc(jx, jy, robot ? 3.4 : 2.2, 0, TAU);
       ctx.fill();
@@ -1531,7 +1563,7 @@ function drawStick(o) {
     ctx.shadowColor = "#ff2020";
     ctx.shadowBlur = 18 * windup;
     ctx.beginPath();
-    ctx.arc(0, hipY + B.torso * 0.3, 5 + windup * 3, 0, TAU);
+    ctx.arc(hip.x - Math.sin(lean) * B.torso * 0.45, hip.y - Math.cos(lean) * B.torso * 0.45, 5 + windup * 3, 0, TAU);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
