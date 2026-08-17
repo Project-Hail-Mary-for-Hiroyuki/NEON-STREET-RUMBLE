@@ -85,6 +85,29 @@
   }
   #copy-code-btn:hover { background: rgba(60, 60, 140, 0.95); }
   #copy-code-btn:active { background: rgba(90, 100, 200, 0.95); }
+  /* 一時停止ボタン(モバイル用) */
+  #pause-btn {
+    position: absolute;
+    top: 46px;
+    right: 14px;
+    z-index: 20;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: bold;
+    color: #9fe6ff;
+    background: rgba(30, 28, 70, 0.85);
+    border: 1px solid rgba(120, 180, 255, 0.6);
+    box-shadow: 0 0 8px rgba(40, 160, 255, 0.3);
+    cursor: pointer;
+    touch-action: manipulation;
+    pointer-events: auto;
+  }
+  #pause-btn.show { display: flex; }
+  #pause-btn:active { filter: brightness(1.5); }
 
   /* コード表示モーダル */
   #code-modal {
@@ -545,6 +568,13 @@
     letter-spacing: 3px;
     text-shadow: 0 0 8px #c200ff;
   }
+  .title-best {
+    margin-top: 8px;
+    font-size: clamp(9px, 1.3vw, 14px);
+    color: #ffe9a8;
+    letter-spacing: 3px;
+    text-shadow: 0 0 8px rgba(255,200,80,0.7);
+  }
   .blink {
     margin-top: 26px;
     font-size: clamp(10px, 1.5vw, 15px);
@@ -585,6 +615,42 @@
     text-shadow: 0 0 8px rgba(255,200,80,0.7);
   }
   .result-row .lbl { color: #9fc6ff; font-size: 0.75em; }
+  .new-record {
+    margin-top: 14px;
+    font-size: clamp(14px, 2.4vw, 24px);
+    letter-spacing: 4px;
+    color: #ffe64e;
+    text-shadow: 0 0 10px #ffd600, 0 0 26px #ff9d00;
+    animation: blink 0.6s steps(2) infinite;
+  }
+
+  /* ---- pause screen ---- */
+  .pause-title {
+    font-size: clamp(24px, 4.5vw, 52px);
+    letter-spacing: 8px;
+    color: #7ef9ff;
+    text-shadow: 0 0 8px #33ddff, 0 0 24px #33ddff, 0 0 60px #33ddff;
+  }
+  .pause-buttons {
+    margin-top: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .pause-buttons button {
+    font-family: inherit;
+    font-size: clamp(11px, 1.4vw, 15px);
+    letter-spacing: 3px;
+    color: #cfe3ff;
+    background: rgba(30, 28, 70, 0.85);
+    border: 1px solid rgba(120, 180, 255, 0.6);
+    border-radius: 8px;
+    padding: 10px 26px;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(40, 160, 255, 0.3);
+    touch-action: manipulation;
+  }
+  .pause-buttons button:active { filter: brightness(1.5); }
 
   #mute-note {
     position: absolute;
@@ -600,6 +666,7 @@
   <div id="ambient"></div>
   <div id="cabinet">
     <button id="copy-code-btn" title="ソースコードをコピー">CODE COPY</button>
+    <button id="pause-btn" title="一時停止" aria-label="一時停止">II</button>
     <div id="screen">
       <canvas id="game" width="960" height="540"></canvas>
 
@@ -653,6 +720,7 @@
       <div class="overlay" id="title-screen">
         <div class="title-neon">NEON STREET<br>RUMBLE</div>
         <div class="title-sub">- ネオン街ストリートファイト -</div>
+        <div class="title-best" id="title-best">BEST SCORE 000000</div>
         <div class="blink">PRESS ENTER / TAP TO START</div>
         <div class="controls-grid">
           <span class="k">A D / ← →</span><span>移動</span>
@@ -661,6 +729,7 @@
           <span class="k">K</span><span>ジャンプ（空中でJ=飛び蹴り）</span>
           <span class="k">L</span><span>アッパーカット</span>
           <span class="k">I</span><span>突進技</span>
+          <span class="k">P</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
         </div>
@@ -669,13 +738,26 @@
       <!-- Game Over -->
       <div class="overlay" id="gameover-screen">
         <div class="gameover-title">GAME OVER</div>
+        <div class="new-record" id="new-record" style="display:none">NEW RECORD!</div>
         <div class="result-row">
           <div><span class="lbl">FINAL SCORE </span><span id="final-score">000000</span></div>
           <div><span class="lbl">MAX COMBO </span><span id="final-combo">0 Hits</span></div>
           <div><span class="lbl">TIME SURVIVED </span><span id="final-time">00:00</span></div>
           <div><span class="lbl">KILLS </span><span id="final-kills">0</span></div>
+          <div><span class="lbl">BEST SCORE </span><span id="best-score">000000</span></div>
         </div>
         <div class="blink">PRESS R / ENTER TO RETRY</div>
+      </div>
+
+      <!-- Pause -->
+      <div class="overlay" id="pause-screen">
+        <div class="pause-title">PAUSED</div>
+        <div class="pause-buttons">
+          <button data-pause="resume">RESUME</button>
+          <button data-pause="restart">RESTART</button>
+          <button data-pause="quit">QUIT TO TITLE</button>
+        </div>
+        <div class="blink">P / ENTER: RESUME</div>
       </div>
 
       <div id="mute-note">M: SOUND ON/OFF</div>
@@ -708,8 +790,17 @@ const fmtTime = t => {
   const m = Math.floor(t / 60), s = Math.floor(t % 60);
   return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
 };
-const elTitle = $("title-screen");
-const elGameOver = $("gameover-screen");
+ const elTitle = $("title-screen");
+ const elGameOver = $("gameover-screen");
+
+/* ハイスコア永続化(localStorage) */
+const BEST_KEY = "neon_street_rumble_best";
+function loadBest() {
+  try { const v = parseInt(localStorage.getItem(BEST_KEY), 10); return Number.isFinite(v) ? v : 0; } catch (e) { return 0; }
+}
+function saveBest(v) {
+  try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) {}
+}
 
 /* 奥行きの描画情報: y(0..1) からスケールと地面Yを算出 */
 const GROUND_FAR = H * 0.46, GROUND_NEAR = H * 0.90;
@@ -773,8 +864,15 @@ addEventListener("keydown", e => {
   if (e.code === "KeyK") { input.jumpHeld = true; input.jumpPressed = true; }
   if (e.code === "KeyL") input.special1Pressed = true;
   if (e.code === "KeyI") input.special2Pressed = true;
-  if (e.code === "Enter" || e.code === "KeyZ") { input.startPressed = true; }
-  if (e.code === "KeyR") { input.startPressed = true; } /* リスタート */
+  if (e.code === "KeyP") game.togglePause();   /* ポーズ */
+  if (e.code === "Enter" || e.code === "KeyZ") {
+    if (game.state === "playing" && game.paused) game.togglePause();
+    else input.startPressed = true;
+  }
+  if (e.code === "KeyR") {
+    if (game.state === "playing" && game.paused) game.start();  /* ポーズ中はリスタート */
+    else input.startPressed = true;
+  }
   if (e.code === "KeyM") game.toggleMute();
 });
 addEventListener("keyup", e => {
@@ -907,12 +1005,36 @@ stickZone.addEventListener("pointermove", e => {
 stickZone.addEventListener("pointerup", releaseStick);
 stickZone.addEventListener("pointercancel", releaseStick);
 addEventListener("blur", () => { input.reset(); stickPointer = null; stickTx = stickTy = 0; setKnob(0, 0); });
-document.addEventListener("visibilitychange", () => { if (document.hidden) { input.reset(); stickPointer = null; stickTx = stickTy = 0; setKnob(0, 0); } });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    input.reset(); stickPointer = null; stickTx = stickTy = 0; setKnob(0, 0);
+    if (game && game.state === "playing" && !game.paused) game.togglePause();  /* タブ離脱で自動ポーズ */
+  }
+});
 
 /* タイトル画面はタップで開始 */
 touchUI.addEventListener("pointerdown", e => { if (game && game.state === "title") game.start(); }, { passive: true });
 elTitle.addEventListener("pointerdown", e => { if (game && game.state === "title") game.start(); }, { passive: true });
 elGameOver.addEventListener("pointerdown", e => { if (game && game.state === "gameover") game.start(); }, { passive: true });
+
+/* ポーズ画面: ボタンで再開/リスタート/タイトルへ */
+const pauseScreenEl = $("pause-screen");
+const pauseBtnEl = $("pause-btn");
+pauseScreenEl.addEventListener("pointerdown", e => {
+  if (!(game.state === "playing" && game.paused)) return;
+  const b = e.target.closest ? e.target.closest("button[data-pause]") : null;
+  if (!b) return;
+  const act = b.dataset.pause;
+  if (act === "resume") game.togglePause();
+  else if (act === "restart") game.start();
+  else if (act === "quit") game.toTitle();
+});
+/* モバイルの一時停止ボタン */
+pauseBtnEl.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  e.stopPropagation();
+  game.togglePause();
+}, { passive: false });
 
 /* ============================== SFX ===================================== */
 let audioCtx = null, muted = false, noiseBuf = null;
@@ -2239,12 +2361,17 @@ const el = {
   comboHud: $("combo-hud"), comboHits: $("combo-hits"),
   finalScore: $("final-score"), finalCombo: $("final-combo"),
   finalTime: $("final-time"), finalKills: $("final-kills"),
+  titleBest: $("title-best"), bestScore: $("best-score"), newRecord: $("new-record"),
+  pauseScreen: $("pause-screen"), pauseBtn: $("pause-btn"),
   title: elTitle, gameover: elGameOver
 };
 
 class Game {
   constructor() {
     this.state = "title";       /* title | playing | gameover */
+    this.paused = false;
+    this.best = loadBest();
+    this.newBest = false;
     this.time = 0;
     this.score = 0;
     this.kills = 0;
@@ -2262,6 +2389,8 @@ class Game {
   start() {
     ensureAudio();
     this.state = "playing";
+    this.paused = false;
+    this.newBest = false;
     this.time = 0; this.score = 0; this.kills = 0;
     this.shake = 0; this.hitstop = 0;
     this.spawnTimer = 1.2;
@@ -2275,7 +2404,33 @@ class Game {
     input.reset();
     el.title.classList.remove("show");
     el.gameover.classList.remove("show");
+    el.pauseScreen.classList.remove("show");
+    this.syncPauseBtn();
     sfx("ui");
+  }
+
+  toTitle() {
+    this.state = "title";
+    this.paused = false;
+    this.time = 0;
+    el.titleBest.textContent = "BEST SCORE " + fmtScore(this.best);
+    el.title.classList.add("show");
+    el.gameover.classList.remove("show");
+    el.pauseScreen.classList.remove("show");
+    this.syncPauseBtn();
+  }
+
+  togglePause() {
+    if (this.state !== "playing") return;
+    this.paused = !this.paused;
+    el.pauseScreen.classList.toggle("show", this.paused);
+    this.syncPauseBtn();
+    if (!this.paused) input.reset();
+    sfx("ui");
+  }
+
+  syncPauseBtn() {
+    el.pauseBtn.classList.toggle("show", this.state === "playing" && !this.paused);
   }
 
   toggleMute() { muted = !muted; }
@@ -2371,11 +2526,20 @@ class Game {
       this.player.deadTimer += dt;
       if (this.player.deadTimer > 1.4) {
         this.state = "gameover";
+        this.paused = false;
         el.finalScore.textContent = fmtScore(this.score);
         el.finalCombo.textContent = this.combo.best + " Hits";
         el.finalTime.textContent = fmtTime(this.time);
         el.finalKills.textContent = this.kills;
+        this.newBest = this.score > this.best;
+        if (this.newBest) {
+          this.best = this.score;
+          saveBest(this.best);
+        }
+        el.bestScore.textContent = fmtScore(this.best);
+        el.newRecord.style.display = this.newBest ? "block" : "none";
         el.gameover.classList.add("show");
+        this.syncPauseBtn();
       }
     }
   }
@@ -2447,16 +2611,20 @@ class Game {
     lastTime = now;
 
     if (this.state === "playing") {
-      let dt = rawDt;
-      if (this.hitstop > 0) dt = rawDt * 0.12;   /* ヒットストップ演出 */
-      this.update(dt);
-      this.render();
+      if (this.paused) {
+        this.render();
+      } else {
+        let dt = rawDt;
+        if (this.hitstop > 0) dt = rawDt * 0.12;   /* ヒットストップ演出 */
+        this.update(dt);
+        this.render();
 
-      /* プレイヤー入力 */
-      if (input.attackTriggered(dt)) this.player.startAttack();
-      if (input.jumpPressed) this.player.jump();
-      if (input.special1Pressed) this.player.startSpecial(0);
-      if (input.special2Pressed) this.player.startSpecial(1);
+        /* プレイヤー入力 */
+        if (input.attackTriggered(dt)) this.player.startAttack();
+        if (input.jumpPressed) this.player.jump();
+        if (input.special1Pressed) this.player.startSpecial(0);
+        if (input.special2Pressed) this.player.startSpecial(1);
+      }
     } else if (this.state === "title") {
       this.time += rawDt;
       this.updateAmbient(rawDt);
@@ -2489,6 +2657,7 @@ const game = new Game();
 game.frame = game.frame.bind(game);
 let lastTime = performance.now();
 buildBackground();
+el.titleBest.textContent = "BEST SCORE " + fmtScore(game.best);
 el.title.classList.add("show");
 requestAnimationFrame(now => game.frame(now));
 

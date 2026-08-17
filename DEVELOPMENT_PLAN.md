@@ -71,13 +71,21 @@
 - [ ] BGM・効果音の拡充
 - [ ] 演出強化(シーン切り替え・演出カメラ等)
 
+### Phase 4a: 永続化とポーズ（完了）
+- [x] ハイスコアの永続保存(localStorage): ゲームオーバー時に保存し、タイトル・ゲームオーバー画面に表示。新記録時は NEW RECORD! 表示
+- [x] ポーズ機能(キー P / モバイルは HUD の II ボタン): 時間・プレイヤー・演出を停止
+- [x] ポーズ画面の操作: RESUME(P/ENTER)・RESTART(R)・QUIT TO TITLE
+- [x] タブ離脱(visibilitychange)時の自動ポーズ
+- [ ] 設定画面(サウンド・難易度等)は未着手(次フェーズ候補)
+
 ### Phase 4: 永続化と利便性
-- [ ] ハイスコアの永続保存(localStorage)
+- [x] ハイスコアの永続保存(localStorage)
 - [ ] 設定画面(サウンド・難易度等)
-- [ ] ポーズ機能
+- [x] ポーズ機能
 
 ## 開発ルール
 
 - 各 Phase 完了時: 構文チェック(`node --check`)→ 既存機能テスト → スマホ実機確認
-- テストハーネス: `/tmp/opencode/smoke2.js`(ゲームロジック)・`/tmp/opencode/lever.js`(仮想レバー)
+- テストハーネス: `/tmp/opencode/smoke2.js`(ゲームロジック)・`/tmp/opencode/lever.js`(仮想レバー)・`/tmp/opencode/special_test.js`(新技)・`/tmp/opencode/persist_test.js`(ポーズ/永続化)
+- DOM/実行時検証: `/tmp/opencode/jsdom_check.js`(jsdom で起動・ポーズ動作確認)
 - コードは単一ファイル `index.html` に集約し、既存機能を壊さないこと
