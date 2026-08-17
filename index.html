@@ -326,6 +326,14 @@
     color: #88aacc;
     margin-bottom: 3px;
   }
+  #stage-label { color: #ff9de0; white-space: nowrap; }
+  #stage-message {
+    position: absolute; top: 72px; left: 50%; transform: translateX(-50%);
+    z-index: 7; pointer-events: none; font-size: 11px; letter-spacing: 2px;
+    color: #ffe76b; text-shadow: 0 0 10px #ff4ec7; opacity: 0;
+    transition: opacity 0.2s;
+  }
+  #stage-message.show { opacity: 1; }
 
   #combo-hud {
     position: absolute;
@@ -695,6 +703,7 @@
           <div id="timer">00:00</div>
           <div class="hud-tiny">SCORE</div>
           <div id="score">000000</div>
+          <div class="hud-tiny" id="stage-label">STAGE 1 · AREA 1</div>
         </div>
       </div>
 
@@ -702,6 +711,7 @@
         <span class="hits" id="combo-hits">0 Hits!</span>
         <div class="hits-label">COMBO</div>
       </div>
+      <div id="stage-message" aria-live="polite"></div>
 
       <!-- touch controls -->
       <div id="touch-ui">
@@ -760,6 +770,12 @@
         <div class="blink">P / ENTER: RESUME</div>
       </div>
 
+      <div class="overlay" id="stageclear-screen">
+        <div class="pause-title">STAGE 1 CLEAR</div>
+        <div class="result-row"><div><span class="lbl">FINAL SCORE </span><span id="clear-score">000000</span></div></div>
+        <div class="blink">PRESS ENTER / TAP TO PLAY AGAIN</div>
+      </div>
+
       <div id="mute-note">M: SOUND ON/OFF</div>
     </div>
   </div>
@@ -809,6 +825,22 @@ const depthInfo = y => ({
   scale: lerp(0.62, 1.26, y),
   groundY: lerp(GROUND_FAR, GROUND_NEAR, y)
 });
+
+/* Stage 1はデータ駆動。新しい敵種・武器ドロップはここに追加できる。 */
+const STAGE_1_AREAS = [
+  { name: "AREA 1 · BACK ALLEY", enemies: [
+    { type: "fighter", x: 700, y: 0.50 }, { type: "ninja", x: 820, y: 0.12 }
+  ]},
+  { name: "AREA 2 · NEON BLOCK", enemies: [
+    { type: "fighter", x: 680, y: 0.88 }, { type: "ninja", x: 805, y: 0.50 }, { type: "ninja", x: 870, y: 0.12 }
+  ]},
+  { name: "AREA 3 · SERVICE ROAD", enemies: [
+    { type: "robot", x: 760, y: 0.50 }, { type: "fighter", x: 850, y: 0.88 }
+  ]},
+  { name: "AREA 4 · UNDERPASS", enemies: [
+    { type: "fighter", x: 680, y: 0.12 }, { type: "ninja", x: 790, y: 0.50 }, { type: "robot", x: 875, y: 0.88 }
+  ]}
+];
 
 /* ============================== Input =================================== */
 class Input {
@@ -1016,6 +1048,7 @@ document.addEventListener("visibilitychange", () => {
 touchUI.addEventListener("pointerdown", e => { if (game && game.state === "title") game.start(); }, { passive: true });
 elTitle.addEventListener("pointerdown", e => { if (game && game.state === "title") game.start(); }, { passive: true });
 elGameOver.addEventListener("pointerdown", e => { if (game && game.state === "gameover") game.start(); }, { passive: true });
+$("stageclear-screen").addEventListener("pointerdown", e => { if (game && game.state === "clear") game.start(); }, { passive: true });
 
 /* ポーズ画面: ボタンで再開/リスタート/タイトルへ */
 const pauseScreenEl = $("pause-screen");
@@ -1827,6 +1860,10 @@ class Player {
       }
     }
     this.x = clamp(this.x, 40, W - 40);
+    /* Area制圧後は右端で前進し、背景を次の戦闘区画へスクロールする。 */
+    if (input.right && this.x >= W - 40 && this.game.canScrollArea()) {
+      this.game.advanceAreaScroll(Math.max(0, this.vx) * dt);
+    }
 
     /* --- 奥・手前のライン移動 (Y) --- */
     let yDir = 0;
@@ -2034,6 +2071,7 @@ class Enemy {
   constructor(game, cfg) {
     this.game = game;
     this.type = cfg.type;
+    this.displayName = cfg.displayName || cfg.type.toUpperCase();
     this.color = cfg.color;
     this.jointColor = cfg.jointColor;
     this.robot = !!cfg.robot;
@@ -2325,6 +2363,63 @@ class Robot extends Enemy {
   }
 }
 
+/* Stage 1用の基本敵。Enemyの状態遷移を共有するため、後続の敵追加も安全。 */
+class StreetFighter extends Enemy {
+  constructor(game) {
+    super(game, {
+      type: "fighter", displayName: "STREET FIGHTER",
+      color: "#b85cff", jointColor: "#ffc14d", robot: false, scaleBias: 1.04,
+      hp: 68, score: 140, speed: 118,
+      windupTime: 0.32, attackTime: 0.18, recoverTime: 0.5,
+      reach: 104, dmg: 9, knock: 0, attackSfx: "punch"
+    });
+  }
+  onChase(dt) {
+    const p = this.game.player;
+    this.facing = p.x > this.x ? 1 : -1;
+    this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 5, 0, 1));
+    this.x += this.vx * dt;
+    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.48;
+  }
+  onAttackActive() {
+    const p = this.game.player;
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo(this.y).scale && Math.abs(p.y - this.y) < 0.36) {
+      const pg = depthInfo(p.y);
+      p.hurt(this.dmg, this.x);
+      this.game.effects.hit(p.x, pg.groundY - 60 * pg.scale, p.y);
+    }
+  }
+}
+
+/* AREA 4後にだけ出現する中ボス。既存Enemy契約を崩さない。 */
+class MidBoss extends Enemy {
+  constructor(game) {
+    super(game, {
+      type: "midboss", displayName: "IRON OGRE",
+      color: "#8d273f", jointColor: "#ffe76b", robot: true, scaleBias: 1.48,
+      hp: 520, score: 1200, speed: 74,
+      windupTime: 0.72, attackTime: 0.28, recoverTime: 0.78,
+      reach: 180, dmg: 19, knock: 0, attackSfx: "explode"
+    });
+  }
+  onChase(dt) {
+    const p = this.game.player;
+    this.facing = p.x > this.x ? 1 : -1;
+    this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 2.5, 0, 1));
+    this.x += this.vx * dt;
+    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.28;
+  }
+  onAttackActive() {
+    const p = this.game.player;
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo(this.y).scale && Math.abs(p.y - this.y) < 0.4) {
+      const pg = depthInfo(p.y);
+      p.hurt(this.dmg, this.x);
+      this.game.effects.hit(p.x, pg.groundY - 50 * pg.scale, p.y);
+      this.game.shake = Math.max(this.game.shake, 12);
+    }
+  }
+}
+
 /* ========================== Combo ======================================= */
 class Combo {
   constructor() {
@@ -2363,6 +2458,8 @@ const el = {
   finalTime: $("final-time"), finalKills: $("final-kills"),
   titleBest: $("title-best"), bestScore: $("best-score"), newRecord: $("new-record"),
   pauseScreen: $("pause-screen"), pauseBtn: $("pause-btn"),
+  stage: $("stage-label"), stageMessage: $("stage-message"),
+  stageClear: $("stageclear-screen"), clearScore: $("clear-score"),
   title: elTitle, gameover: elGameOver
 };
 
@@ -2384,6 +2481,71 @@ class Game {
     this.effects = new HitEffect();
     this.combo = new Combo();
     this.nearestEnemy = null;
+    this.areaIndex = 0;
+    this.areaLocked = true;
+    this.areaResolved = false;
+    this.areaScroll = 0;
+    this.cameraX = 0;
+    this.bossActive = false;
+    this.messageTimer = 0;
+  }
+
+  showStageMessage(text, seconds = 2) {
+    el.stageMessage.textContent = text;
+    el.stageMessage.classList.add("show");
+    this.messageTimer = seconds;
+  }
+
+  makeStageEnemy(spec) {
+    const e = spec.type === "robot" ? new Robot(this) : spec.type === "fighter" ? new StreetFighter(this) : new Ninja(this);
+    e.reset(spec.x, spec.y);
+    return e;
+  }
+
+  startArea(index) {
+    this.areaIndex = index;
+    this.areaLocked = true;
+    this.areaResolved = false;
+    this.areaScroll = 0;
+    this.enemies.length = 0;
+    for (const spec of STAGE_1_AREAS[index].enemies) this.enemies.push(this.makeStageEnemy(spec));
+    this.player.x = 120;
+    el.stage.textContent = "STAGE 1 · AREA " + (index + 1);
+    this.showStageMessage(STAGE_1_AREAS[index].name + " · DEFEAT THEM", 2.2);
+  }
+
+  canScrollArea() { return this.state === "playing" && !this.areaLocked && !this.bossActive; }
+
+  advanceAreaScroll(distance) {
+    this.areaScroll += distance;
+    this.cameraX += distance;
+    if (this.areaScroll >= W) this.startArea(this.areaIndex + 1);
+  }
+
+  resolveCurrentEncounter() {
+    if (this.areaResolved) return;
+    this.areaResolved = true;
+    if (this.bossActive) {
+      this.state = "clear";
+      this.paused = false;
+      el.clearScore.textContent = fmtScore(this.score);
+      el.stageClear.classList.add("show");
+      this.syncPauseBtn();
+      return;
+    }
+    if (this.areaIndex < STAGE_1_AREAS.length - 1) {
+      this.areaLocked = false;
+      this.showStageMessage("AREA CLEAR · MOVE RIGHT", 99);
+      return;
+    }
+    this.bossActive = true;
+    this.areaLocked = true;
+    this.areaResolved = false; /* 中ボス撃破を別の遭遇として判定する */
+    const boss = new MidBoss(this);
+    boss.reset(790, 0.50);
+    this.enemies.push(boss);
+    el.stage.textContent = "STAGE 1 · MID BOSS";
+    this.showStageMessage("WARNING · IRON OGRE", 2.5);
   }
 
   start() {
@@ -2399,12 +2561,14 @@ class Game {
     this.projectiles.length = 0;
     this.effects.reset();
     this.combo.resetAll();
-    this.enemies.push(new Ninja(this));
-    this.enemies.push(new Ninja(this));
+    this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
+    this.areaScroll = 0; this.cameraX = 0; this.bossActive = false;
+    this.startArea(0);
     input.reset();
     el.title.classList.remove("show");
     el.gameover.classList.remove("show");
     el.pauseScreen.classList.remove("show");
+    el.stageClear.classList.remove("show");
     this.syncPauseBtn();
     sfx("ui");
   }
@@ -2417,6 +2581,8 @@ class Game {
     el.title.classList.add("show");
     el.gameover.classList.remove("show");
     el.pauseScreen.classList.remove("show");
+    el.stageClear.classList.remove("show");
+    el.stageMessage.classList.remove("show");
     this.syncPauseBtn();
   }
 
@@ -2477,7 +2643,6 @@ class Game {
 
   update(dt) {
     this.time += dt;
-    this.updateSpawning(dt);
     this.player.update(dt);
     for (const e of this.enemies) e.update(dt);
     for (const p of this.projectiles) p.update(dt);
@@ -2494,6 +2659,13 @@ class Game {
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       if (this.projectiles[i].dead) this.projectiles.splice(i, 1);
+    }
+
+    /* Areaの敵を全滅させたときだけ右進行を解放。AREA 4後は中ボスへ。 */
+    if (!this.areaResolved && !this.enemies.some(e => e.alive)) this.resolveCurrentEncounter();
+    if (this.messageTimer > 0) {
+      this.messageTimer -= dt;
+      if (this.messageTimer <= 0) el.stageMessage.classList.remove("show");
     }
 
     /* 戦闘中の敵 = プレイヤーに最も近い敵 */
@@ -2549,17 +2721,22 @@ class Game {
     ctx.clearRect(0, 0, W, H);
 
     const par = clamp((this.player.x - W / 2) / (W / 2), -1, 1) * 14;
+    const worldScroll = this.cameraX % W;
+    const drawTiled = (image, offset) => {
+      const x = -((offset % W + W) % W);
+      ctx.drawImage(image, x, 0);
+      ctx.drawImage(image, x + W, 0);
+    };
     ctx.save();
-    ctx.translate(-par * 0.3, 0);
-    ctx.drawImage(bgFar, 0, 0);
-    ctx.translate(par * 0.3, 0);
-    ctx.drawImage(bgMid, -par * 0.7, 0);
-    ctx.translate(par * 0.7, 0);
+    drawTiled(bgFar, worldScroll * 0.12);
+    drawTiled(bgMid, worldScroll * 0.34 + par * 0.7);
+    const signOffset = worldScroll * 0.48 + par * 0.7;
     for (const s of neonSigns) {
       const bright = 1 - s.flickerAmt * Math.abs(Math.sin(this.time * s.flickerSpeed + s.flicker * TAU));
-      drawNeonSign(ctx, s, clamp(bright, 0.45, 1));
+      drawNeonSign(ctx, { ...s, x: s.x - signOffset }, clamp(bright, 0.45, 1));
+      drawNeonSign(ctx, { ...s, x: s.x - signOffset + W }, clamp(bright, 0.45, 1));
     }
-    ctx.drawImage(bgGround, -par * 1.2, 0);
+    drawTiled(bgGround, worldScroll * 0.60 + par * 1.2);
     ctx.fillStyle = "rgba(40,20,60,0.10)";
     for (const f of fog) {
       ctx.beginPath();
@@ -2598,7 +2775,7 @@ class Game {
     el.score.textContent = fmtScore(this.score);
     el.playerHp.style.width = (this.player.hp / this.player.maxHp * 100) + "%";
     if (this.nearestEnemy) {
-      el.enemyName.textContent = this.nearestEnemy.robot ? "STICK-BOT 9000" : "SHADOW NINJA";
+      el.enemyName.textContent = this.nearestEnemy.displayName;
       el.enemyHp.style.width = (this.nearestEnemy.hp / this.nearestEnemy.maxHp * 100) + "%";
     } else {
       el.enemyName.textContent = "--";
