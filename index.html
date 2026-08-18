@@ -825,6 +825,7 @@ const depthInfo = y => ({
   scale: lerp(0.62, 1.26, y),
   groundY: lerp(GROUND_FAR, GROUND_NEAR, y)
 });
+const AREA_SCROLL_SPEED = 360; /* 次面への自動スクロール速度(px/s) */
 
 /* Stage 1はデータ駆動。新しい敵種・武器ドロップはここに追加できる。 */
 const STAGE_1_AREAS = [
@@ -1860,10 +1861,7 @@ class Player {
       }
     }
     this.x = clamp(this.x, 40, W - 40);
-    /* Area制圧後は右端で前進し、背景を次の戦闘区画へスクロールする。 */
-    if (input.right && this.x >= W - 40 && this.game.canScrollArea()) {
-      this.game.advanceAreaScroll(Math.max(0, this.vx) * dt);
-    }
+    /* 次面への移行は敵全滅後に自動スクロールで行う(キャラはその場に立ち、背景が流れる)。 */
 
     /* --- 奥・手前のライン移動 (Y) --- */
     let yDir = 0;
@@ -2486,6 +2484,7 @@ class Game {
     this.areaResolved = false;
     this.areaScroll = 0;
     this.cameraX = 0;
+    this.autoScroll = false;
     this.bossActive = false;
     this.messageTimer = 0;
   }
@@ -2514,12 +2513,13 @@ class Game {
     this.showStageMessage(STAGE_1_AREAS[index].name + " · DEFEAT THEM", 2.2);
   }
 
-  canScrollArea() { return this.state === "playing" && !this.areaLocked && !this.bossActive; }
-
   advanceAreaScroll(distance) {
     this.areaScroll += distance;
     this.cameraX += distance;
-    if (this.areaScroll >= W) this.startArea(this.areaIndex + 1);
+    if (this.areaScroll >= W) {
+      this.autoScroll = false;
+      this.startArea(this.areaIndex + 1);
+    }
   }
 
   resolveCurrentEncounter() {
@@ -2534,8 +2534,10 @@ class Game {
       return;
     }
     if (this.areaIndex < STAGE_1_AREAS.length - 1) {
-      this.areaLocked = false;
-      this.showStageMessage("AREA CLEAR · MOVE RIGHT", 99);
+      /* 敵全滅後は自動で背景をスクロールして次面へ移行する(キャラはその場に立つ)。 */
+      this.autoScroll = true;
+      this.areaLocked = true;
+      this.showStageMessage("AREA CLEAR · NEXT AREA", 2);
       return;
     }
     this.bossActive = true;
@@ -2562,7 +2564,7 @@ class Game {
     this.effects.reset();
     this.combo.resetAll();
     this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
-    this.areaScroll = 0; this.cameraX = 0; this.bossActive = false;
+    this.areaScroll = 0; this.cameraX = 0; this.autoScroll = false; this.bossActive = false;
     this.startArea(0);
     input.reset();
     el.title.classList.remove("show");
@@ -2663,6 +2665,8 @@ class Game {
 
     /* Areaの敵を全滅させたときだけ右進行を解放。AREA 4後は中ボスへ。 */
     if (!this.areaResolved && !this.enemies.some(e => e.alive)) this.resolveCurrentEncounter();
+    /* 敵全滅後の自動スクロール(キャラはその場に立ち、背景を流して次面へ)。 */
+    if (this.autoScroll) this.advanceAreaScroll(AREA_SCROLL_SPEED * dt);
     if (this.messageTimer > 0) {
       this.messageTimer -= dt;
       if (this.messageTimer <= 0) el.stageMessage.classList.remove("show");
