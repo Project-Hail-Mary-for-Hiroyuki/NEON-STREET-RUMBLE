@@ -2039,6 +2039,7 @@ const PLAYER_ATTACKS = [
   { name: "punch1",  dur: 0.26, activeStart: 0.08, activeEnd: 0.17, reach: 100, dmg: 8,  kb: 5,  sfx: "punch" },
   { name: "punch2",  dur: 0.30, activeStart: 0.10, activeEnd: 0.21, reach: 110, dmg: 9,  kb: 7,  sfx: "punch" },
   { name: "kick",    dur: 0.40, activeStart: 0.14, activeEnd: 0.30, reach: 132, dmg: 14, kb: 16, sfx: "kick" },
+  { name: "spinKick", dur: 0.50, activeStart: 0.15, activeEnd: 0.40, reach: 140, dmg: 16, kb: 20, sfx: "kick" },
   { name: "flykick", dur: 0.62, activeStart: 0.05, activeEnd: 0.55, reach: 135, dmg: 17, kb: 22, sfx: "kick", air: true }
 ];
 
@@ -2273,8 +2274,8 @@ class Player {
   startAttack() {
     if (!this.alive || this.state === "dead") return;
     let idx;
-    if (this.z > 5 || this.state === "jump") idx = 3;          /* 空中攻撃 = 飛び蹴り */
-    else { idx = this.comboStep; this.comboStep = (this.comboStep + 1) % 3; }
+    if (this.z > 5 || this.state === "jump") idx = 4;          /* 空中攻撃 = 飛び蹴り */
+    else { idx = this.comboStep; this.comboStep = (this.comboStep + 1) % 4; }
     const d = applyWeaponToAttack(PLAYER_ATTACKS[idx], this.currentWeapon);
     this.state = d.air ? "jump" : "attack";
     this.stateTime = 0;
@@ -3308,3 +3309,9 @@ requestAnimationFrame(now => game.frame(now));
 </script>
 </body>
 </html>
+
+      if (d.name === "spinKick") {
+        // 旋風脚: 回転する
+        const spin = Math.sin(this.anim * 10);
+        return { ...base, lean: 0, legFA: spin * 0.5, legFB: -0.2, legBA: -spin * 0.5, legBB: 0.2, armFA: spin * 0.8, armFB: -0.4, armBA: -spin * 0.8, armBB: 0.4 };
+      }
