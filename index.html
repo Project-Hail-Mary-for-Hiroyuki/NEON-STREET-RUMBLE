@@ -2359,6 +2359,10 @@ class Player {
       if (d.name === "kick") {
         return { ...base, lean: 0.42, legFA: 1.25, legFB: -0.06, legBA: -0.35, legBB: 0.4, armFA: -0.9, armFB: 0.2, armBA: -1.0, armBB: 0.2 };
       }
+      if (d.name === "spinKick") {
+        const spin = Math.sin(this.anim * 10);
+        return { ...base, lean: 0, legFA: spin * 0.5, legFB: -0.2, legBA: -spin * 0.5, legBB: 0.2, armFA: spin * 0.8, armFB: -0.4, armBA: -spin * 0.8, armBB: 0.4 };
+      }
     }
     if (this.state === "jump") {
       if (this.attackData && this.attackData.air) {
@@ -3310,8 +3314,4 @@ requestAnimationFrame(now => game.frame(now));
 </body>
 </html>
 
-      if (d.name === "spinKick") {
-        // 旋風脚: 回転する
-        const spin = Math.sin(this.anim * 10);
-        return { ...base, lean: 0, legFA: spin * 0.5, legFB: -0.2, legBA: -spin * 0.5, legBB: 0.2, armFA: spin * 0.8, armFB: -0.4, armBA: -spin * 0.8, armBB: 0.4 };
-      }
+      
