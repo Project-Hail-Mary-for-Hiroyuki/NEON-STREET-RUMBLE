@@ -467,7 +467,7 @@
   }
 
   /* ---- アクションボタン: 右親指で自然に届く独立した大きめの領域 ---- */
-  #touch-ui .b-jump, #touch-ui .b-atk, #touch-ui .b-special {
+  #touch-ui .b-jump, #touch-ui .b-atk {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
@@ -483,8 +483,8 @@
     backdrop-filter: blur(1px);
     -webkit-backdrop-filter: blur(1px);
   }
-  #touch-ui .b-jump:active, #touch-ui .b-atk:active, #touch-ui .b-special:active,
-  #touch-ui .b-jump.active, #touch-ui .b-atk.active, #touch-ui .b-special.active { filter: brightness(1.55); transform: scale(0.94); }
+  #touch-ui .b-jump:active, #touch-ui .b-atk:active,
+  #touch-ui .b-jump.active, #touch-ui .b-atk.active { filter: brightness(1.55); transform: scale(0.94); }
   /* 攻撃は最大の右下ボタン、ジャンプは少し上に置き誤タップを減らす */
   #touch-ui .b-atk {
     right: max(18px, env(safe-area-inset-right, 0px));
@@ -508,29 +508,7 @@
     background: rgba(16,40,30,0.45);
     box-shadow: 0 0 12px rgba(120,255,180,0.25);
   }
-  /* 特殊技(アッパー・突進): 攻撃ボタンの真上に縦に積む */
-  #touch-ui .b-special1 {
-    right: max(18px, env(safe-area-inset-right, 0px));
-    bottom: max(124px, calc(env(safe-area-inset-bottom, 0px) + 102px));
-    width: 70px; height: 70px;
-    font-size: 12px;
-    font-weight: bold;
-    color: #b8a8ff;
-    border: 2px solid rgba(160,130,255,0.55);
-    background: rgba(30,20,60,0.45);
-    box-shadow: 0 0 12px rgba(150,120,255,0.3);
-  }
-  #touch-ui .b-special2 {
-    right: max(18px, env(safe-area-inset-right, 0px));
-    bottom: max(204px, calc(env(safe-area-inset-bottom, 0px) + 182px));
-    width: 70px; height: 70px;
-    font-size: 12px;
-    font-weight: bold;
-    color: #ffc2a8;
-    border: 2px solid rgba(255,170,110,0.55);
-    background: rgba(60,30,16,0.45);
-    box-shadow: 0 0 12px rgba(255,150,80,0.3);
-  }
+  /* 特殊技(アッパー・突進)は廃止。攻撃ボタンのみ維持 */
   #touch-ui .b-pickup {
     position: absolute;
     z-index: 3;
@@ -611,16 +589,6 @@
       position: absolute;
       right: max(94px, calc(env(safe-area-inset-right, 0px) + 88px));
       bottom: max(91px, calc(env(safe-area-inset-bottom, 0px) + 76px));
-    }
-    #touch-ui .b-special1 {
-      position: absolute;
-      right: max(18px, env(safe-area-inset-right, 0px));
-      bottom: max(124px, calc(env(safe-area-inset-bottom, 0px) + 102px));
-    }
-    #touch-ui .b-special2 {
-      position: absolute;
-      right: max(18px, env(safe-area-inset-right, 0px));
-      bottom: max(204px, calc(env(safe-area-inset-bottom, 0px) + 182px));
     }
     #touch-ui .b-pickup {
       position: absolute;
@@ -845,12 +813,10 @@
         <div class="blink">PRESS ENTER / TAP TO START</div>
         <div class="controls-grid">
           <span class="k">A D / ← →</span><span>移動</span>
-          <span class="k">W S / ↑ ↓</span><span>奥・手前ライン移動</span>
           <span class="k">J</span><span>攻撃（連続コンボ）</span>
           <span class="k">K</span><span>ジャンプ（空中でJ=飛び蹴り）</span>
-          <span class="k">L</span><span>アッパーカット</span>
-          <span class="k">I</span><span>突進技</span>
           <span class="k">E</span><span>武器を拾う</span>
+          <span class="k">Q</span><span>武器切替</span>
           <span class="k">P</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
@@ -930,28 +896,25 @@ function saveBest(v) {
   try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) {}
 }
 
-/* 奥行きの描画情報: y(0..1) からスケールと地面Yを算出 */
-const GROUND_FAR = H * 0.46, GROUND_NEAR = H * 0.90;
-const LANE_ZS = [0.12, 0.50, 0.88]; /* スナップ先のライン位置 */
-const depthInfo = y => ({
-  scale: lerp(0.62, 1.26, y),
-  groundY: lerp(GROUND_FAR, GROUND_NEAR, y)
-});
+/* 2D固定: 全キャラクターが同一の地面線に立ち、同一スケールで描画される */
+const GROUND_Y = H * 0.74;   /* キャラの足元が立つ地面線(画面Y) */
+const CHAR_SCALE = 1.5;      /* 大型キャラクター用ベーススケール */
+const depthInfo = () => ({ scale: CHAR_SCALE, groundY: GROUND_Y });
 const AREA_SCROLL_SPEED = 360; /* 次面への自動スクロール速度(px/s) */
 
 /* Stage 1はデータ駆動。新しい敵種・武器ドロップはここに追加できる。 */
 const STAGE_1_AREAS = [
   { name: "AREA 1 · BACK ALLEY", enemies: [
-    { type: "fighter", x: 700, y: 0.50 }, { type: "ninja", x: 820, y: 0.12 }
+    { type: "fighter", x: 700 }, { type: "ninja", x: 820 }
   ]},
   { name: "AREA 2 · NEON BLOCK", enemies: [
-    { type: "fighter", x: 680, y: 0.88 }, { type: "ninja", x: 805, y: 0.50 }, { type: "ninja", x: 870, y: 0.12 }
+    { type: "fighter", x: 680 }, { type: "ninja", x: 805 }, { type: "ninja", x: 870 }
   ]},
   { name: "AREA 3 · SERVICE ROAD", enemies: [
-    { type: "robot", x: 760, y: 0.50 }, { type: "fighter", x: 850, y: 0.88 }
+    { type: "robot", x: 760 }, { type: "fighter", x: 850 }
   ]},
   { name: "AREA 4 · UNDERPASS", enemies: [
-    { type: "fighter", x: 680, y: 0.12 }, { type: "ninja", x: 790, y: 0.50 }, { type: "robot", x: 875, y: 0.88 }
+    { type: "fighter", x: 680 }, { type: "ninja", x: 790 }, { type: "robot", x: 875 }
   ]}
 ];
 
@@ -959,10 +922,8 @@ const STAGE_1_AREAS = [
 class Input {
   constructor() {
     this.left = false; this.right = false;
-    this.back = false; this.front = false;
     this.attackHeld = false; this.jumpHeld = false;
     this.attackPressed = false; this.jumpPressed = false;
-    this.special1Pressed = false;
     this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;   /* 武器切替(Q / スマホ切替ボタン) */
@@ -972,8 +933,6 @@ class Input {
   consumeFrame() {
     this.attackPressed = false;
     this.jumpPressed = false;
-    this.special1Pressed = false;
-    this.special2Pressed = false;
     this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;
@@ -990,10 +949,9 @@ class Input {
     return false;
   }
   reset() {
-    this.left = this.right = this.back = this.front = false;
+    this.left = this.right = false;
     this.attackHeld = this.jumpHeld = false;
     this.attackPressed = this.jumpPressed = this.startPressed = false;
-    this.special1Pressed = this.special2Pressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;
     this.attackRepeat = 0;
@@ -1003,9 +961,7 @@ class Input {
 const input = new Input();
 const keyMap = {
   ArrowLeft: "left", KeyA: "left",
-  ArrowRight: "right", KeyD: "right",
-  ArrowUp: "back", KeyW: "back",
-  ArrowDown: "front", KeyS: "front"
+  ArrowRight: "right", KeyD: "right"
 };
 addEventListener("keydown", e => {
   if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Space"].includes(e.code)) e.preventDefault();
@@ -1051,8 +1007,6 @@ function bindTouchBtn(btn, kind) {
     btn.classList.add("active");
     if (kind === "attack") { input.attackHeld = true; input.attackPressed = true; }
     else if (kind === "jump") { input.jumpHeld = true; input.jumpPressed = true; }
-    else if (kind === "special1") input.special1Pressed = true;
-    else if (kind === "special2") input.special2Pressed = true;
     else if (kind === "pickup") input.pickupPressed = true;
     else if (kind === "switch") input.switchPressed = true;
   };
@@ -1096,21 +1050,17 @@ function setKnob(x, y) {
 }
 function stickNeutral() {
   input.left = false; input.right = false;
-  input.back = false; input.front = false;
 }
 /* 半径ベースのデッドゾーンとヒステリシスで、親指の微振動を移動にしない */
 function applyStick(dx, dy) {
   const dist = Math.hypot(dx, dy);
   const enterDead = Math.max(14, stickRange * 0.26);
   const exitDead = Math.max(10, stickRange * 0.18);
-  const wasMoving = input.left || input.right || input.back || input.front;
+  const wasMoving = input.left || input.right;
   if (dist < (wasMoving ? exitDead : enterDead)) return stickNeutral();
-  const nx = dx / Math.max(dist, 1), ny = dy / Math.max(dist, 1);
-  const axis = 0.38; /* 軽い斜め入力は水平／垂直を優先して安定化 */
-  input.right = nx > axis;
-  input.left = nx < -axis;
-  input.back = ny < -axis;
-  input.front = ny > axis;
+  const nx = dx / Math.max(dist, 1);
+  input.right = nx > 0.38;
+  input.left = nx < -0.38;
 }
 function releaseStick(e) {
   if (stickPointer !== e.pointerId) return;
@@ -1389,7 +1339,7 @@ function buildBackground() {
   /* MID: buildings, windows, graffiti, neon signs */
   {
     const c = bgMid.getContext("2d");
-    const baseY = GROUND_FAR + 14;
+    const baseY = GROUND_Y + 14;
     // More varied buildings
     const buildings = [
       { x: -80, w: 160, h: 180 }, { x: 100, w: 140, h: 160 },
@@ -1458,21 +1408,21 @@ function buildBackground() {
   {
     const c = bgGround.getContext("2d");
     // Road gradient: darker with subtle texture
-    const g = c.createLinearGradient(0, GROUND_FAR, 0, H);
+    const g = c.createLinearGradient(0, GROUND_Y, 0, H);
     g.addColorStop(0, "#0f0a1c");
     g.addColorStop(0.2, "#151020");
     g.addColorStop(0.5, "#1a1422");
     g.addColorStop(0.8, "#120e1a");
     g.addColorStop(1, "#0a0510");
     c.fillStyle = g;
-    c.fillRect(0, GROUND_FAR, W, H - GROUND_FAR);
+    c.fillRect(0, GROUND_Y, W, H - GROUND_Y);
     // Vanishing point lines
     const vpX = W / 2;
     c.strokeStyle = "rgba(180,170,210,0.15)";
     c.lineWidth = 2;
     for (let i = -4; i <= 4; i++) {
       c.beginPath();
-      c.moveTo(vpX + i * 10, GROUND_FAR);
+      c.moveTo(vpX + i * 10, GROUND_Y);
       c.lineTo(vpX + i * 250, H + 20);
       c.stroke();
     }
@@ -1481,7 +1431,7 @@ function buildBackground() {
     c.lineWidth = 1;
     for (let i = 0; i < 20; i++) {
       const t = i / 20;
-      const y = lerp(GROUND_FAR, H, t);
+      const y = lerp(GROUND_Y, H, t);
       const dashStart = lerp(0, W * 0.8, t);
       const dashLen = 20 * (1 + Math.sin(i * 0.5) * 0.2);
       c.beginPath();
@@ -1492,13 +1442,13 @@ function buildBackground() {
     // Wet reflections from neon signs (enhanced)
     for (const s of neonSigns) {
       const baseX = s.x + s.w / 2;
-      const refl = c.createLinearGradient(0, GROUND_FAR, 0, H);
+      const refl = c.createLinearGradient(0, GROUND_Y, 0, H);
       refl.addColorStop(0, hexToRgba(s.color, 0.3));
       refl.addColorStop(1, hexToRgba(s.color, 0));
       c.fillStyle = refl;
       c.beginPath();
-      c.moveTo(baseX - 100, GROUND_FAR);
-      c.lineTo(baseX + 100, GROUND_FAR);
+      c.moveTo(baseX - 100, GROUND_Y);
+      c.lineTo(baseX + 100, GROUND_Y);
       c.lineTo(baseX + 250, H);
       c.lineTo(baseX - 250, H);
       c.closePath();
@@ -1507,7 +1457,7 @@ function buildBackground() {
     // Occasional puddles
     for (let p = 0; p < 3; p++) {
       const puddleX = rand(W * 0.2, W * 0.8);
-      const puddleY = rand(GROUND_FAR + 20, H - 20);
+      const puddleY = rand(GROUND_Y + 20, H - 20);
       const puddleW = rand(60, 120);
       const puddleH = rand(10, 20);
       c.save();
@@ -1596,19 +1546,7 @@ class HitEffect {
     }
     this.ring(x, y, yDepth, "#4ad2ff", 36);
   }
-  /* アッパーカットの上昇する青いエネルギー */
-  riseEnergy(x, y, yDepth, facing) {
-    for (let i = 0; i < 10; i++) {
-      const ang = -Math.PI / 2 + rand(-0.55, 0.55);
-      const sp = rand(120, 300);
-      this.particles.push({
-        x, y, depth: yDepth, vx: Math.cos(ang) * sp * 0.35, vy: Math.sin(ang) * sp,
-        life: 0, maxLife: rand(0.2, 0.4), color: "#4ad2ff",
-        size: rand(2, 4), gravity: -140, shape: "spark", spin: rand(0, TAU), spinV: rand(-8, 8)
-      });
-    }
-    this.ring(x, y, yDepth, "#7de0ff", 30);
-  }
+  /* アッパーカットの上昇する青いエネルギー (2D化により使用停止) */
 
   update(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -1705,11 +1643,10 @@ class HitEffect {
 /* ========================== PickupWeapon ================================== */
 /* ドロップされた武器エンティティ */
 class PickupWeapon {
-  constructor(game, type, x, yDepth, z) {
+  constructor(game, type, x, z) {
     this.game = game;
     this.type = type;
     this.x = x;
-    this.yDepth = yDepth;
     this.z = z || 0;
     this.vx = rand(-80, 80);
     this.vz = rand(80, 140);
@@ -1729,7 +1666,7 @@ class PickupWeapon {
   }
 
   render() {
-    const d = depthInfo(this.yDepth);
+    const d = depthInfo();
     const rx = this.x - this.game.cameraX;
     const ry = d.groundY - 12 - this.z * d.scale;
     const s = d.scale * 0.35;
@@ -1787,39 +1724,32 @@ const WEAPON_SPECS = {
 
 /* ========================== Projectile ================================= */
 class Projectile {
-  constructor(game, x, yDepth, vx, vyDepth, dmg) {
+  constructor(game, x, vx, dmg) {
     this.game = game;
     this.x = x;
-    this.y = yDepth;
     this.z = 0;              /* ジャンプ高さ */
     this.vx = vx;
-    this.vy = vyDepth;
     this.dmg = dmg;
     this.spin = rand(0, TAU);
     this.dead = false;
-    this.hitDone = false;
   }
   update(dt) {
     this.x += this.vx * dt;
-    this.y = clamp(this.y + this.vy * dt, 0, 1);
-    this.z += this.vy * dt * 0; /* 高さは固定 */
     this.spin += dt * 18;
     if (this.x < -80 || this.x > W + 80) this.dead = true;
     /* playerとの当たり判定 */
     const p = this.game.player;
     if (p.alive && p.invincible <= 0) {
-      const pd = depthInfo(p.y);
       const hitX = Math.abs(this.x - p.x) < 22;
-      const hitY = Math.abs(this.y - p.y) < 0.42;
       const hitZ = p.z < 70;
-      if (hitX && hitY && hitZ) {
+      if (hitX && hitZ) {
         this.dead = true;
         p.hurt(this.dmg, this.x);
       }
     }
   }
   render() {
-    const g = depthInfo(this.y);
+    const g = depthInfo();
     const sy = g.groundY - 62 * g.scale - this.z;
     ctx.save();
     ctx.translate(this.x, sy);
@@ -2067,7 +1997,7 @@ class Player {
   constructor(game) {
     this.game = game;
     this.x = W * 0.5;   /* X: 左右 */
-    this.y = 0.5;       /* Y: 奥行き(ベルトライン) */
+    this.y = 0.5;       /* 固定(2D化で奥行きは廃止) */
     this.z = 0;         /* Z: ジャンプ高さ */
     this.vx = 0;
     this.facing = 1;
@@ -2135,7 +2065,7 @@ class Player {
       for (const t of Object.keys(this.inventory)) {
         if (this.inventory[t] > 0) { this.equipWeapon(t); break; }
       }
-      this.game.effects.text(this.x, this.y, this.y,
+      this.game.effects.text(this.x, depthInfo().groundY - 90 * CHAR_SCALE, 0,
         brokenName + " BREAK!", "#ff8f6b");
       sfx("ui");
     }
@@ -2184,18 +2114,6 @@ class Player {
     this.x = clamp(this.x, 40, W - 40);
     /* 次面への移行は敵全滅後に自動スクロールで行う(キャラはその場に立ち、背景が流れる)。 */
 
-    /* --- 奥・手前のライン移動 (Y) --- */
-    let yDir = 0;
-    if (input.back) yDir -= 1;
-    if (input.front) yDir += 1;
-    if (yDir !== 0) {
-      this.y = clamp(this.y + yDir * 0.9 * dt, 0, 1);
-    } else {
-      let nearest = LANE_ZS[0];
-      for (const lz of LANE_ZS) if (Math.abs(lz - this.y) < Math.abs(nearest - this.y)) nearest = lz;
-      this.y = lerp(this.y, nearest, clamp(dt * 7, 0, 1));
-    }
-
     /* --- ジャンプ (Z) --- */
     if (this.z > 0 || this.state === "jump") {
       this.jumpVy -= 1500 * dt;
@@ -2205,7 +2123,7 @@ class Player {
         if (this.state === "jump") {
           this.attackData = null;
           this.state = "idle";
-          this.game.effects.smoke(this.x, depthInfo(this.y).groundY, this.y, "rgba(160,200,255,0.4)", 3);
+          this.game.effects.smoke(this.x, depthInfo().groundY, undefined, "rgba(160,200,255,0.4)", 3);
         }
       }
     }
@@ -2221,12 +2139,6 @@ class Player {
           this.trailTimer = 0.025;
           this.game.effects.ghost(this.trailSnapshot(), 0.22);
         }
-        /* アッパーカット: 発動瞬間の上昇エネルギー */
-        if (d.name === "uppercut" && !d.fx) {
-          d.fx = true;
-          const g = depthInfo(this.y);
-          this.game.effects.riseEnergy(this.x + this.facing * 8, g.groundY - 50 * g.scale, this.y, this.facing);
-        }
       }
       if (this.stateTime >= d.dur) {
         this.attackData = null;
@@ -2237,14 +2149,14 @@ class Player {
       this.attackData.done = true;
       this.doAttackHitbox(this.attackData);
       /* 飛び蹴り発動時の青いエネルギー */
-      const g = depthInfo(this.y);
-      this.game.effects.flyEnergy(this.x + this.facing * 20, g.groundY - 70 * g.scale, this.y, this.facing);
+      const g = depthInfo();
+      this.game.effects.flyEnergy(this.x + this.facing * 20, g.groundY - 70 * g.scale, undefined, this.facing);
     }
   }
 
   /* 残像用のポーズスナップショット */
   trailSnapshot() {
-    const g = depthInfo(this.y);
+    const g = depthInfo();
     return {
       x: this.x, groundY: g.groundY - this.z, scale: g.scale,
       facing: this.facing, color: "#3ecbff", pose: this.pose(),
@@ -2252,19 +2164,16 @@ class Player {
     };
   }
 
-  /* 攻撃ヒットボックス: X距離(scale考慮) と Y距離(奥行き) の両方で判定 */
+  /* 攻撃ヒットボックス: 2DではX距離のみで判定(空中技は敵のZを問わない) */
   doAttackHitbox(d) {
-    const g = depthInfo(this.y);
-    const reach = d.reach * g.scale;
+    const reach = d.reach;
     const hx = this.x + this.facing * reach * 0.55;
-    const hy = g.groundY - 70 * g.scale;
+    const hy = GROUND_Y - 70 * CHAR_SCALE;
     for (const e of this.game.enemies) {
       if (!e.alive || this.hitSet.has(e)) continue;
-      const eg = depthInfo(e.y);
       const xd = Math.abs(e.x - hx);
-      const yd = Math.abs(e.y - this.y);
-      const hitR = reach * 0.85 + 26 * eg.scale;
-      if (xd < hitR && yd < 0.34) {
+      const hitR = reach * 0.85 + 26;
+      if (xd < hitR) {
         this.hitSet.add(e);
         this.game.onAttackHit(e, d.dmg, this.facing * d.kb, hy, hx, d);
       }
@@ -2305,7 +2214,7 @@ class Player {
     this.game.combo.reset();
     const dir = fromX > this.x ? -1 : 1;
     this.vx = dir * 260;
-    const g = depthInfo(this.y);
+    const g = depthInfo();
     this.game.effects.spark(this.x + dir * 20, g.groundY - 60 * g.scale, this.y, "#ff8a5a", 10, 260);
     this.game.effects.text(this.x, g.groundY - 90 * g.scale, this.y, "-" + dmg, "#ff5a5a");
     this.game.shake = Math.max(this.game.shake, 8);
@@ -2319,7 +2228,7 @@ class Player {
   }
 
   render() {
-    const g = depthInfo(this.y);
+    const g = depthInfo();
     const sy = g.groundY - this.z;
     const flashing = this.flash > 0;
     const blink = this.invincible > 0 && Math.floor(this.game.time * 18) % 2 === 0;
@@ -2400,7 +2309,7 @@ class Enemy {
 
     const side = Math.random() < 0.5 ? -1 : 1;
     this.x = side > 0 ? rand(W - 40, W + 80) : rand(-80, 40);
-    this.y = choice(LANE_ZS);
+    this.y = 0.5;
     this.z = 0;
     this.vx = 0;
     this.facing = -side;
@@ -2418,7 +2327,7 @@ class Enemy {
   }
 
   reset(x, y) {
-    this.x = x; this.y = y; this.z = 0;
+    this.x = x; this.y = y === undefined ? 0.5 : y; this.z = 0;
     this.hp = this.maxHp;
     this.state = "idle"; this.stateTime = 0;
     this.flash = 0; this.hitstun = 0; this.knockVx = 0;
@@ -2444,15 +2353,14 @@ class Enemy {
 
     switch (this.state) {
       case "idle": {
-        const d = Math.hypot(p.x - this.x, (p.y - this.y) * 300);
+        const d = Math.abs(p.x - this.x);
         if (d < this.sightDist) this.setState("chase");
         break;
       }
       case "chase": {
         this.onChase(dt);
         const d = Math.abs(p.x - this.x);
-        const yd = Math.abs(p.y - this.y);
-        if (this.attackCooldown <= 0 && d < this.reach && yd < 0.4) {
+        if (this.attackCooldown <= 0 && d < this.reach) {
           this.setState("windup");
         }
         this.attackCooldown -= dt;
@@ -2506,7 +2414,7 @@ class Enemy {
 
   render() {
     if (!this.alive && this.deathTime <= 0) return;
-    const g = depthInfo(this.y);
+    const g = depthInfo();
     let sy = g.groundY - this.z;
     let scale = g.scale * this.scaleBias;
     let alpha = 1;
@@ -2560,8 +2468,6 @@ class Ninja extends Enemy {
     this.facing = dir;
     this.vx = lerp(this.vx, dir * this.speed, clamp(dt * 6, 0, 1));
     this.x += this.vx * dt;
-    /* 奥行きもプレイヤーへ寄せる */
-    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.6;
     /* 手裏剣投擲: 中距離で確率発生 */
     const adx = Math.abs(p.x - this.x);
     if (adx > 150 && adx < 420 && Math.random() < this.throwChance) {
@@ -2571,13 +2477,9 @@ class Ninja extends Enemy {
 
   makeShuriken() {
     const p = this.game.player;
-    const g = depthInfo(this.y);
-    const dx = p.x - this.x, dy = p.y - this.y;
-    const len = Math.hypot(dx, dy * 300);
     const spd = 400;
     sfx("shuriken");
-    return new Projectile(this.game, this.x + this.facing * 20, this.y,
-      (dx / len) * spd, (dy / len) * spd * 0.1, 5);
+    return new Projectile(this.game, this.x + this.facing * 20, Math.sign(p.x - this.x) * spd, 5);
   }
 
   onAttackActive(dt) {
@@ -2586,7 +2488,7 @@ class Ninja extends Enemy {
     this.trailTimer -= dt;
     if (this.trailTimer <= 0) {
       this.trailTimer = 0.03;
-      const g = depthInfo(this.y);
+      const g = depthInfo();
       this.game.effects.ghost({
         x: this.x, groundY: g.groundY, scale: g.scale * this.scaleBias,
         facing: this.facing, color: "#16181f", pose: this.pose(),
@@ -2596,10 +2498,9 @@ class Ninja extends Enemy {
     /* 近接攻撃の当たり判定 */
     const p = this.game.player;
     if (p.alive && p.invincible <= 0) {
-      const pg = depthInfo(p.y);
+      const pg = depthInfo();
       const xd = Math.abs(p.x - this.x);
-      const yd = Math.abs(p.y - this.y);
-      if (xd < this.reach * depthInfo(this.y).scale && yd < 0.36) {
+      if (xd < this.reach * depthInfo().scale) {
         sfx(this.attackSfx, 0.2);
         p.hurt(this.dmg, this.x);
         this.game.effects.hit(p.x, pg.groundY - 60 * pg.scale, p.y);
@@ -2640,16 +2541,14 @@ class Robot extends Enemy {
     this.facing = p.x > this.x ? 1 : -1;
     this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 3, 0, 1));
     this.x += this.vx * dt;
-    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.35;
   }
 
   onAttackActive(dt) {
     const p = this.game.player;
     if (p.alive && p.invincible <= 0) {
-      const pg = depthInfo(p.y);
+      const pg = depthInfo();
       const xd = Math.abs(p.x - this.x);
-      const yd = Math.abs(p.y - this.y);
-      if (xd < this.reach * depthInfo(this.y).scale && yd < 0.38) {
+      if (xd < this.reach * depthInfo().scale) {
         p.hurt(this.dmg, this.x);
         this.game.effects.hit(p.x, pg.groundY - 50 * pg.scale, p.y);
         this.game.shake = Math.max(this.game.shake, 10);
@@ -2689,12 +2588,11 @@ class StreetFighter extends Enemy {
     this.facing = p.x > this.x ? 1 : -1;
     this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 5, 0, 1));
     this.x += this.vx * dt;
-    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.48;
   }
   onAttackActive() {
     const p = this.game.player;
-    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo(this.y).scale && Math.abs(p.y - this.y) < 0.36) {
-      const pg = depthInfo(p.y);
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo().scale) {
+      const pg = depthInfo();
       p.hurt(this.dmg, this.x);
       this.game.effects.hit(p.x, pg.groundY - 60 * pg.scale, p.y);
     }
@@ -2717,12 +2615,11 @@ class MidBoss extends Enemy {
     this.facing = p.x > this.x ? 1 : -1;
     this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 2.5, 0, 1));
     this.x += this.vx * dt;
-    this.y += clamp(p.y - this.y, -1, 1) * dt * 0.28;
   }
   onAttackActive() {
     const p = this.game.player;
-    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo(this.y).scale && Math.abs(p.y - this.y) < 0.4) {
-      const pg = depthInfo(p.y);
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo().scale) {
+      const pg = depthInfo();
       p.hurt(this.dmg, this.x);
       this.game.effects.hit(p.x, pg.groundY - 50 * pg.scale, p.y);
       this.game.shake = Math.max(this.game.shake, 12);
@@ -2812,7 +2709,7 @@ class Game {
 
   makeStageEnemy(spec) {
     const e = spec.type === "robot" ? new Robot(this) : spec.type === "fighter" ? new StreetFighter(this) : new Ninja(this);
-    e.reset(spec.x, spec.y);
+    e.reset(spec.x, spec.y === undefined ? 0.5 : spec.y);
     return e;
   }
 
@@ -2940,7 +2837,7 @@ class Game {
     this.kills++;
     const bonus = e.score + this.combo.count * 8;
     this.score += bonus;
-    const g = depthInfo(e.y);
+    const g = depthInfo();
     this.effects.spark(e.x, g.groundY - 50 * g.scale, e.y, e.robot ? "#ff7a2a" : "#ffffff", e.robot ? 26 : 14, 320);
     this.effects.ring(e.x, g.groundY - 50 * g.scale, e.y, e.robot ? "#ff7a2a" : "#ffffff", e.robot ? 60 : 40);
     this.effects.smoke(e.x, g.groundY - 40 * g.scale, e.y, "rgba(120,120,140,0.6)", e.robot ? 8 : 4);
@@ -2983,7 +2880,7 @@ class Game {
           if (Math.random() < 0.3) {
             const weaponTypes = Object.keys(WEAPON_SPECS);
             const type = choice(weaponTypes);
-            this.droppedWeapons.push(new PickupWeapon(this, type, e.x, e.y, 20));
+            this.droppedWeapons.push(new PickupWeapon(this, type, e.x, 20));
           }
           this.enemies.splice(i, 1);
         }
@@ -3001,7 +2898,7 @@ class Game {
           p.inventory[p.currentWeapon] = (p.inventory[p.currentWeapon] || 0) + 1;
         }
         p.equipWeapon(next);
-        this.effects.text(p.x, p.y, p.y, WEAPON_SPECS[next].displayName + "!", "#8dffd8");
+        this.effects.text(p.x, depthInfo().groundY - 90 * CHAR_SCALE, 0, WEAPON_SPECS[next].displayName + "!", "#8dffd8");
         sfx("ui");
       }
     }
@@ -3010,13 +2907,12 @@ class Game {
       for (let i = this.droppedWeapons.length - 1; i >= 0; i--) {
         const w = this.droppedWeapons[i];
         const dx = this.player.x - w.x;
-        const dy = (this.player.y - w.yDepth) * 300;
-        if (dx * dx + dy * dy < w.pickupRadius * w.pickupRadius) {
+        if (dx * dx < w.pickupRadius * w.pickupRadius) {
           const name = WEAPON_SPECS[w.type].displayName;
           this.player.pickupWeapon(w.type);
           this.droppedWeapons.splice(i, 1);
           // 拾った演出: テキスト表示
-          this.effects.text(w.x, w.yDepth, w.yDepth, name + " GET!", "#ffe76b");
+          this.effects.text(w.x, depthInfo().groundY - 90 * CHAR_SCALE, 0, name + " GET!", "#ffe76b");
           sfx("ui");
         }
       }
