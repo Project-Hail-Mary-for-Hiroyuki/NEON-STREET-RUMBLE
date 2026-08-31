@@ -485,7 +485,7 @@
   }
   #touch-ui .b-jump:active, #touch-ui .b-atk:active,
   #touch-ui .b-jump.active, #touch-ui .b-atk.active { filter: brightness(1.55); transform: scale(0.94); }
-  /* 攻撃は最大の右下ボタン、ジャンプは少し上に置き誤タップを減らす */
+  /* 攻撃・ジャンプ・拾う・切替を右下に2x2クラスタ配置(片手の親指で全て届く) */
   #touch-ui .b-atk {
     right: max(18px, env(safe-area-inset-right, 0px));
     bottom: max(22px, env(safe-area-inset-bottom, 0px));
@@ -498,8 +498,8 @@
     box-shadow: 0 0 12px rgba(255,140,60,0.3);
   }
   #touch-ui .b-jump {
-    right: max(94px, calc(env(safe-area-inset-right, 0px) + 88px));
-    bottom: max(91px, calc(env(safe-area-inset-bottom, 0px) + 76px));
+    right: max(18px, env(safe-area-inset-right, 0px));
+    bottom: max(122px, calc(env(safe-area-inset-bottom, 0px) + 108px));
     width: 70px; height: 70px;
     font-size: 13px;
     font-weight: bold;
@@ -508,23 +508,26 @@
     background: rgba(16,40,30,0.45);
     box-shadow: 0 0 12px rgba(120,255,180,0.25);
   }
-  /* 特殊技(アッパー・突進)は廃止。攻撃ボタンのみ維持 */
-  #touch-ui .b-pickup {
+  /* 拾う・武器切替: 攻撃の左隣にまとめてクラスタ化 */
+  #touch-ui .b-pickup, #touch-ui .b-switch {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
-    border-radius: 50%;
     font-family: inherit;
+    border-radius: 50%;
+    text-align: center;
     display: flex;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(1px);
     -webkit-backdrop-filter: blur(1px);
-    right: max(18px, env(safe-area-inset-right, 0px));
-    bottom: max(284px, calc(env(safe-area-inset-bottom, 0px) + 262px));
+  }
+  #touch-ui .b-pickup {
+    right: max(100px, calc(env(safe-area-inset-right, 0px) + 90px));
+    bottom: max(22px, env(safe-area-inset-bottom, 0px));
     width: 60px; height: 60px;
     font-size: 11px;
     font-weight: bold;
@@ -535,10 +538,9 @@
   }
   #touch-ui .b-pickup:active, #touch-ui .b-pickup.active { filter: brightness(1.55); transform: scale(0.94); }
 
-  /* 武器切替ボタン: 「拾う」の上に配置(既存レイアウトを崩さない) */
   #touch-ui .b-switch {
-    right: max(18px, env(safe-area-inset-right, 0px));
-    bottom: max(354px, calc(env(safe-area-inset-bottom, 0px) + 332px));
+    right: max(100px, calc(env(safe-area-inset-right, 0px) + 90px));
+    bottom: max(122px, calc(env(safe-area-inset-bottom, 0px) + 108px));
     width: 60px; height: 44px;
     font-size: 11px;
     font-weight: bold;
@@ -548,6 +550,37 @@
     box-shadow: 0 0 12px rgba(120,255,200,0.25);
   }
   #touch-ui .b-switch:active, #touch-ui .b-switch.active { filter: brightness(1.55); transform: scale(0.94); }
+
+  /* ---- スマホ(横持ち): 画面が低いのでボタンを小さくして画面を隠さない ---- */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #touch-ui .b-atk {
+      right: max(12px, env(safe-area-inset-right, 0px));
+      bottom: max(10px, env(safe-area-inset-bottom, 0px));
+      width: 62px; height: 62px;
+      font-size: 12px;
+    }
+    #touch-ui .b-jump {
+      right: max(12px, env(safe-area-inset-right, 0px));
+      bottom: max(78px, calc(env(safe-area-inset-bottom, 0px) + 66px));
+      width: 48px; height: 48px;
+      font-size: 10px;
+    }
+    #touch-ui .b-pickup {
+      right: max(80px, calc(env(safe-area-inset-right, 0px) + 72px));
+      bottom: max(10px, env(safe-area-inset-bottom, 0px));
+      width: 44px; height: 44px;
+      font-size: 9px;
+    }
+    #touch-ui .b-switch {
+      right: max(80px, calc(env(safe-area-inset-right, 0px) + 72px));
+      bottom: max(78px, calc(env(safe-area-inset-bottom, 0px) + 66px));
+      width: 44px; height: 34px;
+      font-size: 9px;
+    }
+    /* 横持ちではレバーも小型化 */
+    #stick { left: max(10px, env(safe-area-inset-left, 0px)); bottom: max(10px, env(safe-area-inset-bottom, 0px)); width: 120px; height: 120px; }
+    #stick-knob { width: 40px; height: 40px; margin-left: -20px; margin-top: -20px; }
+  }
 
   /* ---- スマホ(縦持ち): 全画面にして仮想レバーを最下部へ ---- */
   /* ---- スマホ(縦持ち): 全画面にして仮想レバーを最下部へ ---- */
@@ -579,7 +612,11 @@
     #touch-ui .b-jump { width: 72px; height: 72px; font-size: 13px; }
     #touch-ui .b-pickup { width: 72px; height: 72px; font-size: 12px; }
     #touch-ui .b-switch { width: 60px; height: 60px; font-size: 12px; }
-    /* Button positions (same as non-media query) */
+    /* 武器スロット5種を縦持ちで収めるため小型化 */
+    #weapon-slots { bottom: 10px; gap: 4px; }
+    #weapon-slots .wslot { min-width: 40px; padding: 3px 5px; font-size: 8px; }
+    #weapon-slots .ws-name { letter-spacing: 0; }
+    /* Button positions (same as non-media query: 右下2x2クラスタ) */
     #touch-ui .b-atk {
       position: absolute;
       right: max(18px, env(safe-area-inset-right, 0px));
@@ -587,18 +624,18 @@
     }
     #touch-ui .b-jump {
       position: absolute;
-      right: max(94px, calc(env(safe-area-inset-right, 0px) + 88px));
-      bottom: max(91px, calc(env(safe-area-inset-bottom, 0px) + 76px));
+      right: max(18px, env(safe-area-inset-right, 0px));
+      bottom: max(122px, calc(env(safe-area-inset-bottom, 0px) + 108px));
     }
     #touch-ui .b-pickup {
       position: absolute;
-      right: max(18px, env(safe-area-inset-right, 0px));
-      bottom: max(284px, calc(env(safe-area-inset-bottom, 0px) + 262px));
+      right: max(100px, calc(env(safe-area-inset-right, 0px) + 90px));
+      bottom: max(22px, env(safe-area-inset-bottom, 0px));
     }
     #touch-ui .b-switch {
       position: absolute;
-      right: max(18px, env(safe-area-inset-right, 0px));
-      bottom: max(354px, calc(env(safe-area-inset-bottom, 0px) + 332px));
+      right: max(100px, calc(env(safe-area-inset-right, 0px) + 90px));
+      bottom: max(122px, calc(env(safe-area-inset-bottom, 0px) + 108px));
     }
   }
   /* ---- overlays ---- */
@@ -642,6 +679,19 @@
     color: #ffe9a8;
     letter-spacing: 3px;
     text-shadow: 0 0 8px rgba(255,200,80,0.7);
+  }
+  .title-stages {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+  .title-stage {
+    font-size: clamp(8px, 1.1vw, 12px);
+    color: #cfd6ff;
+    letter-spacing: 2px;
+    text-shadow: 0 0 6px rgba(120,140,255,0.6);
   }
   .blink {
     margin-top: 26px;
@@ -780,6 +830,12 @@
         <button class="wslot" data-wtype="hammer" aria-label="ハンマー">
           <span class="ws-name">HAMMER</span><span class="ws-count" id="ws-count-hammer">x0</span>
         </button>
+        <button class="wslot" data-wtype="nunchaku" aria-label="ヌンチャク">
+          <span class="ws-name">NUNCHAKU</span><span class="ws-count" id="ws-count-nunchaku">x0</span>
+        </button>
+        <button class="wslot" data-wtype="staff" aria-label="杖">
+          <span class="ws-name">STAFF</span><span class="ws-count" id="ws-count-staff">x0</span>
+        </button>
         <div id="weapon-status">
           <span id="weapon-label" style="font-size:11px;color:#ffe76b;text-shadow:0 0 6px rgba(255,230,120,0.7)">--</span>
           <span id="weapon-dur" style="font-size:10px;color:#8dffd8;margin-left:6px"></span>
@@ -810,6 +866,7 @@
         <div class="title-neon">NEON STREET<br>RUMBLE</div>
         <div class="title-sub">- ネオン街ストリートファイト -</div>
         <div class="title-best" id="title-best">BEST SCORE 000000</div>
+        <div class="title-stages" id="title-stages"></div>
         <div class="blink">PRESS ENTER / TAP TO START</div>
         <div class="controls-grid">
           <span class="k">A D / ← →</span><span>移動</span>
@@ -849,7 +906,7 @@
       </div>
 
       <div class="overlay" id="stageclear-screen">
-        <div class="pause-title">STAGE 1 CLEAR</div>
+        <div class="pause-title" id="clear-title">ALL STAGES CLEAR</div>
         <div class="result-row"><div><span class="lbl">FINAL SCORE </span><span id="clear-score">000000</span></div></div>
         <div class="blink">PRESS ENTER / TAP TO PLAY AGAIN</div>
       </div>
@@ -901,21 +958,158 @@ const GROUND_Y = H * 0.74;   /* キャラの足元が立つ地面線(画面Y) */
 const CHAR_SCALE = 1.5;      /* 大型キャラクター用ベーススケール */
 const depthInfo = () => ({ scale: CHAR_SCALE, groundY: GROUND_Y });
 const AREA_SCROLL_SPEED = 360; /* 次面への自動スクロール速度(px/s) */
+const stageTheme = stageIndex => STAGES[stageIndex] ? STAGES[stageIndex].theme : "downtown";
 
-/* Stage 1はデータ駆動。新しい敵種・武器ドロップはここに追加できる。 */
-const STAGE_1_AREAS = [
-  { name: "AREA 1 · BACK ALLEY", enemies: [
-    { type: "fighter", x: 700 }, { type: "ninja", x: 820 }
-  ]},
-  { name: "AREA 2 · NEON BLOCK", enemies: [
-    { type: "fighter", x: 680 }, { type: "ninja", x: 805 }, { type: "ninja", x: 870 }
-  ]},
-  { name: "AREA 3 · SERVICE ROAD", enemies: [
-    { type: "robot", x: 760 }, { type: "fighter", x: 850 }
-  ]},
-  { name: "AREA 4 · UNDERPASS", enemies: [
-    { type: "fighter", x: 680 }, { type: "ninja", x: 790 }, { type: "robot", x: 875 }
-  ]}
+/* 全ステージはデータ駆動。新しい敵種・武器ドロップ・ステージはここに追加できる。 */
+/* 各ステージ: name / theme(背景パレット) / areas(敵配置) / boss(中ボス設定) */
+const THEMES = {
+  downtown: {
+    sky: ["#0a001a", "#1a002e", "#0d0024", "#000000"],
+    glow: ["rgba(30,0,60,0)", "rgba(60,20,100,0.4)", "rgba(30,0,60,0)"],
+    moon: { color: "#ffe9b0", shadow: "#fff0c8" },
+    skyline: "#0a001a",
+    farNeon: [
+      { x: 100, y: 0.28, w: 80, h: 20, text: "★", color: "#ff4ec7" },
+      { x: 400, y: 0.32, w: 100, h: 25, text: "◆", color: "#33ddff" },
+      { x: 700, y: 0.26, w: 90, h: 22, text: "⚡", color: "#ffe64e" }
+    ],
+    buildings: ["#1a1230", "#181033", "#160f2e", "#191130", "#150e2a", "#0f0a1f"],
+    graffiti: ["#ff4ec7", "#33ddff", "#ffe64e", "#7dff6a", "#ff7a2a", "#ff00ff", "#00ffff"],
+    graffitiWords: ["KOZO", "NINJA!", "赤", "RUMBLE", "夜遊び", "NEON", "★", "◆"],
+    signs: [
+      { x: 110, y: -150, w: 100, h: 30, text: "BAR", color: "#ff4ec7" },
+      { x: 250, y: -200, w: 140, h: 35, text: "ゲームセンター", color: "#33ddff" },
+      { x: 420, y: -160, w: 120, h: 30, text: "RAMEN", color: "#ffe64e" },
+      { x: 620, y: -180, w: 130, h: 35, text: "ネオン街", color: "#7dff6a" },
+      { x: 820, y: -140, w: 110, h: 28, text: "HOTEL", color: "#ff00ff" },
+      { x: 950, y: -120, w: 100, h: 25, text: "SPA", color: "#00ffff" }
+    ],
+    ground: ["#0f0a1c", "#151020", "#1a1422", "#120e1a", "#0a0510"],
+    vpLine: "rgba(180,170,210,0.15)",
+    lane: "rgba(255,255,255,0.1)",
+    puddle: "rgba(100,120,180,0.4)"
+  },
+  harbor: {
+    sky: ["#001020", "#00283c", "#00182e", "#000a18"],
+    glow: ["rgba(0,60,80,0)", "rgba(0,90,120,0.45)", "rgba(0,60,80,0)"],
+    moon: { color: "#d8f6ff", shadow: "#7ee0ff" },
+    skyline: "#00101c",
+    farNeon: [
+      { x: 120, y: 0.3, w: 90, h: 22, text: "⚓", color: "#7dffc9" },
+      { x: 430, y: 0.28, w: 110, h: 25, text: "◆", color: "#33ddff" },
+      { x: 720, y: 0.32, w: 90, h: 22, text: "★", color: "#ffe64e" }
+    ],
+    buildings: ["#0d1a26", "#0f1f2c", "#0b1621", "#11222f", "#0e1d29", "#0a1520"],
+    graffiti: ["#33ddff", "#7dffc9", "#ffe64e", "#ff7a2a", "#ff4ec7", "#00ffff", "#ff00ff"],
+    graffitiWords: ["DOCK", "港町", "FISH!", "RUMBLE", "波", "NEON", "▲", "✖"],
+    signs: [
+      { x: 100, y: -160, w: 120, h: 32, text: "FISHING", color: "#33ddff" },
+      { x: 270, y: -200, w: 140, h: 35, text: "倉庫", color: "#ffe64e" },
+      { x: 430, y: -150, w: 110, h: 30, text: "DOCK", color: "#7dffc9" },
+      { x: 620, y: -180, w: 140, h: 34, text: "コンテナ", color: "#ff7a2a" },
+      { x: 810, y: -140, w: 100, h: 28, text: "MARINA", color: "#00ffff" },
+      { x: 950, y: -120, w: 90, h: 25, text: "波止場", color: "#ff4ec7" }
+    ],
+    ground: ["#0a1418", "#10202a", "#12222c", "#0d1a24", "#081018"],
+    vpLine: "rgba(160,200,220,0.15)",
+    lane: "rgba(160,230,255,0.12)",
+    puddle: "rgba(80,160,200,0.45)"
+  },
+  rooftop: {
+    sky: ["#120014", "#2a0033", "#1c0028", "#08000e"],
+    glow: ["rgba(80,0,90,0)", "rgba(120,30,140,0.5)", "rgba(80,0,90,0)"],
+    moon: { color: "#ffd8f8", shadow: "#ff7ef0" },
+    skyline: "#140020",
+    farNeon: [
+      { x: 110, y: 0.3, w: 90, h: 22, text: "▲", color: "#ff7ef0" },
+      { x: 430, y: 0.28, w: 100, h: 25, text: "◆", color: "#7dd8ff" },
+      { x: 720, y: 0.32, w: 90, h: 22, text: "⚡", color: "#ffe64e" }
+    ],
+    buildings: ["#241030", "#281238", "#201028", "#2c1438", "#251132", "#180a22"],
+    graffiti: ["#ff7ef0", "#7dd8ff", "#ffe64e", "#ff4ec7", "#00ffff", "#c27dff", "#ff2e88"],
+    graffitiWords: ["頂上", "SKY", "ネオン", "RUMBLE", "月", "HIGH", "◆", "Ω"],
+    signs: [
+      { x: 100, y: -170, w: 120, h: 34, text: "ROOFTOP", color: "#ff7ef0" },
+      { x: 280, y: -205, w: 130, h: 32, text: "電波塔", color: "#7dd8ff" },
+      { x: 440, y: -155, w: 110, h: 30, text: "SKY", color: "#ffe64e" },
+      { x: 630, y: -185, w: 130, h: 34, text: "観覧車", color: "#ff4ec7" },
+      { x: 820, y: -145, w: 100, h: 28, text: "月夜", color: "#c27dff" },
+      { x: 950, y: -125, w: 90, h: 25, text: "高所", color: "#00ffff" }
+    ],
+    ground: ["#1c0e26", "#26112e", "#2a1236", "#1f0d2a", "#140820"],
+    vpLine: "rgba(220,160,240,0.15)",
+    lane: "rgba(255,140,240,0.12)",
+    puddle: "rgba(200,120,220,0.4)"
+  }
+};
+
+const STAGES = [
+  {
+    name: "STAGE 1", theme: "downtown",
+    areas: [
+      { name: "AREA 1 · BACK ALLEY", enemies: [
+        { type: "fighter", x: 700 }, { type: "ninja", x: 820 }
+      ]},
+      { name: "AREA 2 · NEON BLOCK", enemies: [
+        { type: "fighter", x: 680 }, { type: "ninja", x: 805 }, { type: "ninja", x: 870 }
+      ]},
+      { name: "AREA 3 · SERVICE ROAD", enemies: [
+        { type: "robot", x: 760 }, { type: "fighter", x: 850 }
+      ]},
+      { name: "AREA 4 · UNDERPASS", enemies: [
+        { type: "fighter", x: 680 }, { type: "ninja", x: 790 }, { type: "robot", x: 875 }
+      ]}
+    ],
+    boss: {
+      displayName: "IRON OGRE", color: "#8d273f", jointColor: "#ffe76b",
+      robot: true, scaleBias: 1.48, hp: 520, score: 1200, speed: 74,
+      windupTime: 0.72, attackTime: 0.28, recoverTime: 0.78, reach: 180, dmg: 19
+    }
+  },
+  {
+    name: "STAGE 2", theme: "harbor",
+    areas: [
+      { name: "AREA 1 · CARGO YARD", enemies: [
+        { type: "fighter", x: 680 }, { type: "kungfu", x: 840 }
+      ]},
+      { name: "AREA 2 · CONTAINER ROW", enemies: [
+        { type: "ninja", x: 690 }, { type: "kungfu", x: 810 }, { type: "fighter", x: 900 }
+      ]},
+      { name: "AREA 3 · DOCK PLATFORM", enemies: [
+        { type: "robot", x: 760 }, { type: "kungfu", x: 860 }, { type: "drone", x: 940 }
+      ]},
+      { name: "AREA 4 · WAREHOUSE", enemies: [
+        { type: "kungfu", x: 680 }, { type: "robot", x: 800 }, { type: "drone", x: 880 }, { type: "ninja", x: 950 }
+      ]}
+    ],
+    boss: {
+      displayName: "STEEL TITAN", color: "#1f4a63", jointColor: "#7ee0ff",
+      robot: true, scaleBias: 1.5, hp: 640, score: 1400, speed: 82,
+      windupTime: 0.66, attackTime: 0.3, recoverTime: 0.8, reach: 190, dmg: 20
+    }
+  },
+  {
+    name: "STAGE 3", theme: "rooftop",
+    areas: [
+      { name: "AREA 1 · SKY GARDEN", enemies: [
+        { type: "kungfu", x: 700 }, { type: "drone", x: 850 }
+      ]},
+      { name: "AREA 2 · ANTENNA DECK", enemies: [
+        { type: "drone", x: 680 }, { type: "ninja", x: 800 }, { type: "kungfu", x: 890 }
+      ]},
+      { name: "AREA 3 · BILLBOARD WALK", enemies: [
+        { type: "robot", x: 760 }, { type: "kungfu", x: 850 }, { type: "drone", x: 930 }
+      ]},
+      { name: "AREA 4 · MASTTOP", enemies: [
+        { type: "drone", x: 680 }, { type: "robot", x: 790 }, { type: "kungfu", x: 870 }, { type: "ninja", x: 950 }
+      ]}
+    ],
+    boss: {
+      displayName: "NEON DRAGON", color: "#7a2ab8", jointColor: "#ff7ef0",
+      robot: true, scaleBias: 1.52, hp: 780, score: 1700, speed: 90,
+      windupTime: 0.6, attackTime: 0.32, recoverTime: 0.85, reach: 200, dmg: 22
+    }
+  }
 ];
 
 /* ============================== Input =================================== */
@@ -1280,16 +1474,18 @@ function drawNeonSign(c, s, bright) {
   c.globalAlpha = 1;
 }
 
-function buildBackground() {
+function buildBackground(themeKey) {
+  const theme = THEMES[themeKey] || THEMES.downtown;
+  neonSigns.length = 0;
   /* FAR: distant city and sky */
   {
     const c = bgFar.getContext("2d");
-    // Gradient sky: deep purple to black
+    // Gradient sky
     const sky = c.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, "#0a001a");
-    sky.addColorStop(0.3, "#1a002e");
-    sky.addColorStop(0.6, "#0d0024");
-    sky.addColorStop(1, "#000000");
+    sky.addColorStop(0, theme.sky[0]);
+    sky.addColorStop(0.3, theme.sky[1]);
+    sky.addColorStop(0.6, theme.sky[2]);
+    sky.addColorStop(1, theme.sky[3]);
     c.fillStyle = sky;
     c.fillRect(0, 0, W, H);
     // Stars
@@ -1299,16 +1495,16 @@ function buildBackground() {
     }
     // Distant city glow (horizontal band)
     const glow = c.createLinearGradient(0, H * 0.25, 0, H * 0.35);
-    glow.addColorStop(0, "rgba(30,0,60,0)");
-    glow.addColorStop(0.5, "rgba(60,20,100,0.4)");
-    glow.addColorStop(1, "rgba(30,0,60,0)");
+    glow.addColorStop(0, theme.glow[0]);
+    glow.addColorStop(0.5, theme.glow[1]);
+    glow.addColorStop(1, theme.glow[2]);
     c.fillStyle = glow;
     c.fillRect(0, H * 0.25, W, H * 0.1);
     // Moon
     c.save();
-    c.shadowColor = "#fff0c8";
+    c.shadowColor = theme.moon.shadow;
     c.shadowBlur = 40;
-    c.fillStyle = "#ffe9b0";
+    c.fillStyle = theme.moon.color;
     c.beginPath(); c.arc(W * 0.82, H * 0.14, 26, 0, TAU); c.fill();
     c.restore();
     // Distant skyline silhouette
@@ -1316,16 +1512,12 @@ function buildBackground() {
     let x = -20;
     while (x < W + 20) {
       const bw = rand(40, 120), bh = rand(50, 150);
-      c.fillStyle = "#0a001a";
+      c.fillStyle = theme.skyline;
       c.fillRect(x, skylineY - bh, bw, bh + 20);
       x += bw + rand(5, 15);
     }
     // Far neon signs (faint)
-    const farNeon = [
-      { x: 100, y: H * 0.28, w: 80, h: 20, text: "★", color: "#ff4ec7" },
-      { x: 400, y: H * 0.32, w: 100, h: 25, text: "◆", color: "#33ddff" },
-      { x: 700, y: H * 0.26, w: 90, h: 22, text: "⚡", color: "#ffe64e" }
-    ];
+    const farNeon = theme.farNeon.map(s => ({ ...s, y: H * s.y }));
     for (const s of farNeon) {
       c.save();
       c.globalAlpha = 0.15;
@@ -1347,7 +1539,7 @@ function buildBackground() {
       { x: 680, w: 220, h: 240 }, { x: 920, w: 150, h: 190 }
     ];
     for (const b of buildings) {
-      c.fillStyle = choice(["#1a1230", "#181033", "#160f2e", "#191130", "#150e2a", "#0f0a1f"]);
+      c.fillStyle = choice(theme.buildings);
       c.fillRect(b.x, baseY - b.h, b.w, b.h + 20);
       // Windows
       for (let wy = baseY - b.h + 16; wy < baseY - 24; wy += 24) {
@@ -1365,7 +1557,7 @@ function buildBackground() {
       }
     }
     // Graffiti
-    const gCols = ["#ff4ec7", "#33ddff", "#ffe64e", "#7dff6a", "#ff7a2a", "#ff00ff", "#00ffff"];
+    const gCols = theme.graffiti;
     const spots = [
       { x: 50, y: baseY - 90, s: 1.0 }, { x: 200, y: baseY - 60, s: 0.9 },
       { x: 450, y: baseY - 100, s: 1.2 }, { x: 700, y: baseY - 70, s: 0.8 },
@@ -1379,22 +1571,15 @@ function buildBackground() {
       c.font = `bold ${18 * g.s}px 'Arial Black', sans-serif`;
       c.save();
       c.translate(g.x, g.y); c.rotate(rand(-0.15, 0.15));
-      c.strokeText(choice(["KOZO", "NINJA!", "赤", "RUMBLE", "夜遊び", "NEON", "★", "◆"]), 0, 0);
+      c.strokeText(choice(theme.graffitiWords), 0, 0);
       c.globalAlpha = 0.4;
       c.fillText(choice(["★", "◆", "⚡", "Ω", "△", "◇"]), rand(25, 65), rand(-12, 12));
       c.restore();
     }
     c.restore();
     c.globalAlpha = 1;
-    // Neon signs (more variety, some animated)
-    const defs = [
-      { x: 110, y: baseY - 150, w: 100, h: 30, text: "BAR", color: "#ff4ec7" },
-      { x: 250, y: baseY - 200, w: 140, h: 35, text: "ゲームセンター", color: "#33ddff" },
-      { x: 420, y: baseY - 160, w: 120, h: 30, text: "RAMEN", color: "#ffe64e" },
-      { x: 620, y: baseY - 180, w: 130, h: 35, text: "ネオン街", color: "#7dff6a" },
-      { x: 820, y: baseY - 140, w: 110, h: 28, text: "HOTEL", color: "#ff00ff" },
-      { x: 950, y: baseY - 120, w: 100, h: 25, text: "SPA", color: "#00ffff" }
-    ];
+    // Neon signs (theme-driven)
+    const defs = theme.signs.map(s => ({ ...s, y: baseY + s.y }));
     for (const s of defs) {
       s.flicker = rand(0, 1);
       s.flickerSpeed = rand(2, 5);
@@ -1409,16 +1594,16 @@ function buildBackground() {
     const c = bgGround.getContext("2d");
     // Road gradient: darker with subtle texture
     const g = c.createLinearGradient(0, GROUND_Y, 0, H);
-    g.addColorStop(0, "#0f0a1c");
-    g.addColorStop(0.2, "#151020");
-    g.addColorStop(0.5, "#1a1422");
-    g.addColorStop(0.8, "#120e1a");
-    g.addColorStop(1, "#0a0510");
+    g.addColorStop(0, theme.ground[0]);
+    g.addColorStop(0.2, theme.ground[1]);
+    g.addColorStop(0.5, theme.ground[2]);
+    g.addColorStop(0.8, theme.ground[3]);
+    g.addColorStop(1, theme.ground[4]);
     c.fillStyle = g;
     c.fillRect(0, GROUND_Y, W, H - GROUND_Y);
     // Vanishing point lines
     const vpX = W / 2;
-    c.strokeStyle = "rgba(180,170,210,0.15)";
+    c.strokeStyle = theme.vpLine;
     c.lineWidth = 2;
     for (let i = -4; i <= 4; i++) {
       c.beginPath();
@@ -1427,7 +1612,7 @@ function buildBackground() {
       c.stroke();
     }
     // Lane markings
-    c.strokeStyle = "rgba(255,255,255,0.1)";
+    c.strokeStyle = theme.lane;
     c.lineWidth = 1;
     for (let i = 0; i < 20; i++) {
       const t = i / 20;
@@ -1462,7 +1647,7 @@ function buildBackground() {
       const puddleH = rand(10, 20);
       c.save();
       c.globalAlpha = 0.15;
-      c.fillStyle = "rgba(100,120,180,0.4)";
+      c.fillStyle = theme.puddle;
       c.beginPath();
       c.ellipse(puddleX, puddleY, puddleW / 2, puddleH / 2, 0, 0, TAU);
       c.fill();
@@ -1718,6 +1903,35 @@ const WEAPON_SPECS = {
       c.fillRect(-25, -50, 50, 30);
       c.fillStyle = "#403020";
       c.fillRect(-8, -20, 16, 70);
+    }
+  },
+  "nunchaku": {
+    displayName: "ヌンチャク", dmg: 14, range: 105, durability: 14, color: "#d8c8a0",
+    renderFunc: (c) => {
+      c.strokeStyle = "#d8c8a0";
+      c.lineWidth = 6;
+      c.beginPath();
+      c.moveTo(-6, -34);
+      c.lineTo(4, -20);
+      c.moveTo(-4, -16);
+      c.lineTo(6, -2);
+      c.stroke();
+      c.fillStyle = "#403020";
+      c.fillRect(-10, -40, 10, 14);
+      c.fillRect(-8, -12, 10, 14);
+    }
+  },
+  "staff": {
+    displayName: "杖", dmg: 20, range: 120, durability: 9, color: "#c94f4f",
+    renderFunc: (c) => {
+      c.strokeStyle = "#c94f4f";
+      c.lineWidth = 7;
+      c.beginPath();
+      c.moveTo(0, -60);
+      c.lineTo(0, 45);
+      c.stroke();
+      c.fillStyle = "#2a1a10";
+      c.fillRect(-4, 45, 8, 10);
     }
   }
 };
@@ -1979,7 +2193,9 @@ const PLAYER_ATTACKS = [
 const WEAPON_HIT_FX = {
   "bat":    { color: "#ffe76b", shake: 1.15 },   /* 黄: 軽快な打撃 */
   "sword":  { color: "#a8e8ff", shake: 1.0, slash: true },  /* 水色: 鋭い斬撃 */
-  "hammer": { color: "#ff9d5e", shake: 1.6 }     /* 橙: 重い衝撃 */
+  "hammer": { color: "#ff9d5e", shake: 1.6 },    /* 橙: 重い衝撃 */
+  "nunchaku": { color: "#d8c8a0", shake: 1.05 }, /* 木色: 高速の連打 */
+  "staff":  { color: "#ff7a6e", shake: 1.3 }     /* 赤: 長い一閃 */
 };
 function applyWeaponToAttack(d, currentWeapon) {
   if (!currentWeapon || d.air) return d;
@@ -2599,15 +2815,17 @@ class StreetFighter extends Enemy {
   }
 }
 
-/* AREA 4後にだけ出現する中ボス。既存Enemy契約を崩さない。 */
+/* AREA 4後にだけ出現する中ボス。cfg(ステージごとのboss設定)を受け取り、既存Enemy契約を崩さない。 */
 class MidBoss extends Enemy {
-  constructor(game) {
+  constructor(game, cfg) {
+    const c = cfg || {};
     super(game, {
-      type: "midboss", displayName: "IRON OGRE",
-      color: "#8d273f", jointColor: "#ffe76b", robot: true, scaleBias: 1.48,
-      hp: 520, score: 1200, speed: 74,
-      windupTime: 0.72, attackTime: 0.28, recoverTime: 0.78,
-      reach: 180, dmg: 19, knock: 0, attackSfx: "explode"
+      type: "midboss", displayName: c.displayName || "IRON OGRE",
+      color: c.color || "#8d273f", jointColor: c.jointColor || "#ffe76b",
+      robot: true, scaleBias: c.scaleBias || 1.48,
+      hp: c.hp || 520, score: c.score || 1200, speed: c.speed || 74,
+      windupTime: c.windupTime || 0.72, attackTime: c.attackTime || 0.28, recoverTime: c.recoverTime || 0.78,
+      reach: c.reach || 180, dmg: c.dmg || 19, knock: 0, attackSfx: "explode"
     });
   }
   onChase(dt) {
@@ -2624,6 +2842,104 @@ class MidBoss extends Enemy {
       this.game.effects.hit(p.x, pg.groundY - 50 * pg.scale, p.y);
       this.game.shake = Math.max(this.game.shake, 12);
     }
+  }
+}
+
+/* カンフー使い: 素早く接近し、素早い連続パンチ(2連)で攻める。後退回避はせず攻撃特化。 */
+class KungFu extends Enemy {
+  constructor(game) {
+    super(game, {
+      type: "kungfu", displayName: "KUNG FU FIGHTER",
+      color: "#ffb840", jointColor: "#ff4ec7", robot: false, scaleBias: 1.0,
+      hp: 60, score: 170, speed: 210,
+      windupTime: 0.18, attackTime: 0.22, recoverTime: 0.34,
+      reach: 100, dmg: 8, knock: 0, attackSfx: "punch"
+    });
+  }
+  onChase(dt) {
+    const p = this.game.player;
+    this.facing = p.x > this.x ? 1 : -1;
+    this.vx = lerp(this.vx, this.facing * this.speed, clamp(dt * 6, 0, 1));
+    this.x += this.vx * dt;
+  }
+  onAttackActive() {
+    const p = this.game.player;
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < this.reach * depthInfo().scale) {
+      const pg = depthInfo();
+      sfx("punch", 0.2);
+      p.hurt(this.dmg, this.x);
+      this.game.effects.hit(p.x, pg.groundY - 60 * pg.scale, p.y);
+    }
+  }
+  pose() {
+    const n = {
+      legFA: Math.sin(this.anim * 1.4) * 0.7, legFB: 0.3,
+      legBA: Math.sin(this.anim * 1.4 + Math.PI) * 0.7, legBB: 0.3,
+      armFA: -Math.sin(this.anim * 1.4 + Math.PI) * 0.7, armBA: -Math.sin(this.anim * 1.4) * 0.7,
+      lean: 0.16, armFB: 0.3, armBB: 0.3
+    };
+    if (this.state === "windup") return { ...n, armFA: 0.6, armFB: 0.15, armBA: 0.4, armBB: 0.15, lean: 0.3 };
+    if (this.state === "attack") return { ...n, armFA: 1.35, armFB: 0.05, armBA: -1.0, armBB: 0.3, lean: 0.4 };
+    if (this.state === "recover") return { ...n, armFA: 0.7, armFB: 0.25, lean: 0.22 };
+    return n;
+  }
+}
+
+/* ドローン: 空中を浮遊し、中距離からレーザーを放つ飛行型。近づかれると逃げる。 */
+class Drone extends Enemy {
+  constructor(game) {
+    super(game, {
+      type: "drone", displayName: "DRONE",
+      color: "#3a4a5a", jointColor: "#7ee0ff", robot: true, scaleBias: 0.8,
+      hp: 40, score: 200, speed: 120,
+      windupTime: 0.3, attackTime: 0.2, recoverTime: 0.5,
+      reach: 70, dmg: 6, knock: 0, attackSfx: "punch",
+      throwChance: 0.02
+    });
+    this.hoverZ = 70;     /* 空中浮遊高さ(2DのZ) */
+    this.z = this.hoverZ;
+    this.hoverT = rand(0, 10);
+  }
+  update(dt) {
+    /* 常に空中に浮遊(ホバリング揺れ) */
+    this.hoverT += dt;
+    this.z = this.hoverZ + Math.sin(this.hoverT * 3) * 10;
+    super.update(dt);
+  }
+  onChase(dt) {
+    const p = this.game.player;
+    this.facing = p.x > this.x ? 1 : -1;
+    /* 一定距離を保つ: 遠ければ近づき、近すぎたら離れる */
+    const d = Math.abs(p.x - this.x);
+    const dir = d > 260 ? (p.x > this.x ? 1 : -1) : (d < 160 ? (p.x > this.x ? -1 : 1) : 0);
+    this.vx = lerp(this.vx, dir * this.speed, clamp(dt * 4, 0, 1));
+    this.x += this.vx * dt;
+    /* レーザー発射 */
+    if (d > 120 && Math.random() < this.throwChance) this.game.projectiles.push(this.makeLaser());
+  }
+  makeLaser() {
+    const p = this.game.player;
+    sfx("shuriken", 0.2);
+    const pr = new Projectile(this.game, this.x + this.facing * 16, Math.sign(p.x - this.x) * 430, 5);
+    pr.z = this.hoverZ;   /* 空中の高さから放つ */
+    return pr;
+  }
+  onAttackActive() {
+    /* 近距離では体当たり */
+    const p = this.game.player;
+    if (p.alive && p.invincible <= 0 && Math.abs(p.x - this.x) < 90) {
+      p.hurt(this.dmg, this.x);
+    }
+  }
+  pose() {
+    const hover = { 
+      legFA: 0.2, legFB: 0.2, legBA: -0.2, legBB: 0.2,
+      armFA: 0.4, armFB: 0.2, armBA: -0.4, armBB: 0.2,
+      lean: 0.1
+    };
+    if (this.state === "windup") return { ...hover, armFA: 0.2, armBA: -0.2, lean: 0.2 };
+    if (this.state === "attack") return { ...hover, armFA: 0.9, armBA: -0.9 };
+    return hover;
   }
 }
 
@@ -2663,7 +2979,7 @@ const el = {
   comboHud: $("combo-hud"), comboHits: $("combo-hits"),
   finalScore: $("final-score"), finalCombo: $("final-combo"),
   finalTime: $("final-time"), finalKills: $("final-kills"),
-  titleBest: $("title-best"), bestScore: $("best-score"), newRecord: $("new-record"),
+  titleBest: $("title-best"), titleStages: $("title-stages"), bestScore: $("best-score"), newRecord: $("new-record"),
   pauseScreen: $("pause-screen"), pauseBtn: $("pause-btn"),
   stage: $("stage-label"), stageMessage: $("stage-message"),
   enemiesLeft: $("enemies-left"), weaponDur: $("weapon-dur"),
@@ -2692,6 +3008,7 @@ class Game {
     this.droppedWeapons = [];
     this.nearestEnemy = null;
     this.areaIndex = 0;
+    this.stageIndex = 0;
     this.areaLocked = true;
     this.areaResolved = false;
     this.areaScroll = 0;
@@ -2708,21 +3025,32 @@ class Game {
   }
 
   makeStageEnemy(spec) {
-    const e = spec.type === "robot" ? new Robot(this) : spec.type === "fighter" ? new StreetFighter(this) : new Ninja(this);
+    let e;
+    switch (spec.type) {
+      case "robot": e = new Robot(this); break;
+      case "fighter": e = new StreetFighter(this); break;
+      case "ninja": e = new Ninja(this); break;
+      case "kungfu": e = new KungFu(this); break;
+      case "drone": e = new Drone(this); break;
+      default: e = new StreetFighter(this);
+    }
     e.reset(spec.x, spec.y === undefined ? 0.5 : spec.y);
     return e;
   }
 
+  currentStage() { return STAGES[this.stageIndex]; }
+
   startArea(index) {
+    const stage = this.currentStage();
     this.areaIndex = index;
     this.areaLocked = true;
     this.areaResolved = false;
     this.areaScroll = 0;
     this.enemies.length = 0;
-    for (const spec of STAGE_1_AREAS[index].enemies) this.enemies.push(this.makeStageEnemy(spec));
+    for (const spec of stage.areas[index].enemies) this.enemies.push(this.makeStageEnemy(spec));
     this.player.x = 120;
-    el.stage.textContent = "STAGE 1 · AREA " + (index + 1);
-    this.showStageMessage(STAGE_1_AREAS[index].name + " · DEFEAT THEM", 2.2);
+    el.stage.textContent = stage.name + " · AREA " + (index + 1);
+    this.showStageMessage(stage.areas[index].name + " · DEFEAT THEM", 2.2);
   }
 
   advanceAreaScroll(distance) {
@@ -2734,10 +3062,27 @@ class Game {
     }
   }
 
+  makeBoss(cfg) {
+    const boss = new MidBoss(this, cfg);
+    boss.reset(790, 0.50);
+    return boss;
+  }
+
   resolveCurrentEncounter() {
     if (this.areaResolved) return;
     this.areaResolved = true;
+    const stage = this.currentStage();
     if (this.bossActive) {
+      if (this.stageIndex < STAGES.length - 1) {
+        /* 次のステージへ: 背景を作り直して STAGE 1から開始 */
+        this.stageIndex++;
+        this.bossActive = false;
+        this.autoScroll = false;
+        buildBackground(stageTheme(this.stageIndex));
+        this.startArea(0);
+        this.showStageMessage(STAGES[this.stageIndex].name + " START", 2.2);
+        return;
+      }
       this.state = "clear";
       this.paused = false;
       el.clearScore.textContent = fmtScore(this.score);
@@ -2745,7 +3090,7 @@ class Game {
       this.syncPauseBtn();
       return;
     }
-    if (this.areaIndex < STAGE_1_AREAS.length - 1) {
+    if (this.areaIndex < stage.areas.length - 1) {
       /* 敵全滅後は自動で背景をスクロールして次面へ移行する(キャラはその場に立つ)。 */
       this.autoScroll = true;
       this.areaLocked = true;
@@ -2755,11 +3100,10 @@ class Game {
     this.bossActive = true;
     this.areaLocked = true;
     this.areaResolved = false; /* 中ボス撃破を別の遭遇として判定する */
-    const boss = new MidBoss(this);
-    boss.reset(790, 0.50);
+    const boss = this.makeBoss(stage.boss);
     this.enemies.push(boss);
-    el.stage.textContent = "STAGE 1 · MID BOSS";
-    this.showStageMessage("WARNING · IRON OGRE", 2.5);
+    el.stage.textContent = stage.name + " · MID BOSS";
+    this.showStageMessage("WARNING · " + stage.boss.displayName, 2.5);
   }
 
   start() {
@@ -2777,8 +3121,10 @@ class Game {
     this.effects.reset();
     this.combo.resetAll();
     this.droppedWeapons.length = 0;
+    this.stageIndex = 0;
     this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
     this.areaScroll = 0; this.cameraX = 0; this.autoScroll = false; this.bossActive = false;
+    buildBackground(STAGES[0].theme);
     this.startArea(0);
     input.reset();
     el.title.classList.remove("show");
@@ -3122,8 +3468,11 @@ class Game {
 const game = new Game();
 game.frame = game.frame.bind(game);
 let lastTime = performance.now();
-buildBackground();
+buildBackground(stageTheme(0));
 el.titleBest.textContent = "BEST SCORE " + fmtScore(game.best);
+el.titleStages.innerHTML = STAGES.map((s, i) =>
+  '<div class="title-stage">STAGE ' + (i + 1) + ' · <span style="color:' + ((THEMES[s.theme] && THEMES[s.theme].moon) ? THEMES[s.theme].moon.color : "#ffe76b") + '">' + s.name + '</span> · ' + s.boss.displayName + '</div>'
+).join("");
 el.title.classList.add("show");
 requestAnimationFrame(now => game.frame(now));
 

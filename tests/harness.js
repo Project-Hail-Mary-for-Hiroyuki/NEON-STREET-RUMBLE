@@ -89,8 +89,9 @@ const WEAPON_IDS = ["player-hpbar","enemy-hpbar","enemy-name","timer","score","c
   "weapon-slots","weapon-label","copy-code-btn","code-close","code-text","code-copy","code-download",
   "code-status","touch-ui","stick","stick-zone","stick-base","stick-knob","ambient","cabinet",
   "scanlines","vignette","glass","scanline-move","hud","player-hud","enemy-hud","meta-hud",
-  "ws-count-bat","ws-count-sword","ws-count-hammer","mute-note"];
-const WEAPON_TYPES = ["bat","sword","hammer"];
+  "ws-count-bat","ws-count-sword","ws-count-hammer","ws-count-nunchaku","ws-count-staff","mute-note",
+  "title-stages"];
+const WEAPON_TYPES = ["bat","sword","hammer","nunchaku","staff"];
 
 function makeDocument() {
   const els = new Map();
@@ -199,8 +200,8 @@ function ok(cond, msg) {
 function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy };", sandbox);
-  const { game, input } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, WEAPON_SPECS };", sandbox);
+  const { game, input, WEAPON_SPECS, KungFu, Drone } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -258,7 +259,7 @@ function run() {
   frame(sandbox, game, 1 / 60);
   ok(game.player.attackData && game.player.attackData.name === "flykick", "air attack -> flykick");
 
-  /* 6. 武器ピックアップ */
+  /* 6. 武器ピックアップ(既存 + 新武器 nunchaku/staff) */
   game.start();
   game.droppedWeapons.push({
     x: game.player.x, yDepth: game.player.y || 0, type: "bat", alive: true, pickupRadius: 60,
@@ -268,6 +269,27 @@ function run() {
   input.pickupPressed = true;
   game.update(1 / 60);
   ok(game.player.currentWeapon === "bat", "pickup weapon equips it");
+  const allWeaponTypes = Object.keys(WEAPON_SPECS);
+  ok(allWeaponTypes.indexOf("nunchaku") >= 0 && allWeaponTypes.indexOf("staff") >= 0, "WEAPON_SPECS includes nunchaku/staff");
+  game.player.inventory.nunchaku = 1;
+  ok(game.player.equipWeapon("nunchaku"), "nunchaku weapon equips");
+  ok(game.player.currentWeapon === "nunchaku", "nunchaku is current weapon");
+  ok(game.player.weaponDurability === WEAPON_SPECS.nunchaku.durability, "nunchaku has durability");
+  game.player.inventory.staff = 1;
+  game.player.equipWeapon("staff");
+  ok(game.player.currentWeapon === "staff", "staff weapon equips");
+
+  /* 6b. 新敵クラスを生成・撃破できる */
+  game.enemies.length = 0;
+  const kf = new KungFu(game);
+  kf.reset(500, 0.5);
+  const dr = new Drone(game);
+  dr.reset(600, 0.5);
+  game.enemies.push(kf, dr);
+  ok(kf.hp > 0 && dr.hp > 0, "KungFu & Drone spawn with hp");
+  kf.hurt(9999, 0);
+  dr.hurt(9999, 0);
+  ok(!kf.alive && !dr.alive, "KungFu & Drone can be killed");
 
   /* 7. ゲームオーバー */
   game.start();
@@ -283,21 +305,23 @@ function run() {
   }
   ok(gotGameover, "player death -> gameover state");
 
-  /* 8. 2D化後のフル進行: AREA1→4 → 中ボス → CLEAR (奥行き廃止の回帰テスト) */
+  /* 8. 2D化後のフル進行: STAGE1-3 × AREA1-4 → 各中ボス → ALL CLEAR (複数ステージ回帰テスト) */
   game.start();
-  let maxAreaSeen = 0, sawBoss = false, sawClear = false;
+  let maxAreaSeen = 0, sawMidBoss = false, stageIndexSeen = 0, sawClear = false;
   let guard2 = 0;
-  while (guard2++ < 20000 && !sawClear) {
+  while (guard2++ < 40000 && !sawClear) {
     for (const e of game.enemies) if (e.alive) e.hurt(9999, 0);
     step(sandbox, game, 1 / 60, 30);
     maxAreaSeen = Math.max(maxAreaSeen, game.areaIndex);
-    if (game.bossActive) sawBoss = true;
+    if (game.enemies.some(e => e.alive && e.type === "midboss")) sawMidBoss = true;
+    stageIndexSeen = Math.max(stageIndexSeen, game.stageIndex);
     if (game.state === "clear") sawClear = true;
     if (game.state === "gameover") break;
   }
   ok(maxAreaSeen >= 3, "progression reaches AREA 4 (maxArea=" + maxAreaSeen + ")");
-  ok(sawBoss, "mid boss spawns after AREA 4");
-  ok(sawClear, "clearing mid boss reaches 'clear' state");
+  ok(stageIndexSeen >= 2, "progression reaches STAGE 3 (maxStage=" + stageIndexSeen + ")");
+  ok(sawMidBoss, "mid boss spawns after AREA 4");
+  ok(sawClear, "clearing final stage boss reaches 'clear' state");
   let allFinite = true;
   for (const e of game.enemies) if (!Number.isFinite(e.y)) allFinite = false;
   ok(allFinite, "all enemy y values are finite (2D fixed depth)");
