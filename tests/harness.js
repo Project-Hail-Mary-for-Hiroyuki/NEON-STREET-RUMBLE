@@ -200,8 +200,8 @@ function ok(cond, msg) {
 function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, WEAPON_SPECS };", sandbox);
-  const { game, input, WEAPON_SPECS, KungFu, Drone } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, PickupWeapon, KungFu, Drone } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -213,6 +213,9 @@ function run() {
   vm.runInContext("", sandbox);
 
   console.log("== smoke test ==");
+  ok(src.includes('e.code === "KeyP") input.pickupPressed = true'), "P key is pickup");
+  ok(src.includes('e.code === "Escape") game.togglePause()'), "Escape key is pause");
+  ok(!src.includes('e.code === "KeyE") input.pickupPressed = true'), "E key no longer picks up weapons");
 
   /* 1. 起動: title状態 */
   ok(game.state === "title", "boot -> state is 'title'");
@@ -236,6 +239,24 @@ function run() {
   ok(guard < 20000, "enemies can be killed");
   step(sandbox, game, 1 / 60, 300);
   ok(game.areaIndex >= 1 || game.autoScroll || game.state !== "playing", "area advances after clear");
+
+  /* 3b. Weapon Feedback V2: 各AREA最低1個 + 拾得猶予 */
+  game.start();
+  for (const e of game.enemies) if (e.alive) e.hurt(9999, 0);
+  step(sandbox, game, 1 / 60, 80);
+  ok(game.droppedWeapons.length >= 1, "area guarantees at least one weapon drop");
+  ok(game.areaTransitionDelay > 0 && !game.autoScroll, "area clear waits for weapon pickup before scroll");
+  ok(game.droppedWeapons[0] instanceof PickupWeapon, "drop is PickupWeapon entity");
+  ok(game.droppedWeapons[0].pickupRadius >= 50, "pickup radius is forgiving");
+
+  /* 3c. Weapon durability + feedback metadata */
+  ok(WEAPON_SPECS.bat.durability === 18, "bat durability = 18");
+  ok(WEAPON_SPECS.sword.durability === 15, "sword durability = 15");
+  ok(WEAPON_SPECS.hammer.durability === 10, "hammer durability = 10");
+  ok(WEAPON_SPECS.nunchaku.durability === 22, "nunchaku durability = 22");
+  ok(WEAPON_SPECS.staff.durability === 16, "staff durability = 16");
+  ok(WEAPON_HIT_FX.hammer.word === "ドゴォン!!" && WEAPON_HIT_FX.hammer.hitstop > WEAPON_HIT_FX.sword.hitstop,
+    "hammer has distinctive heavy feedback");
 
   /* 4. 攻撃・コンボ (punch1->punch2->kick->spinKick) */
   game.start();
