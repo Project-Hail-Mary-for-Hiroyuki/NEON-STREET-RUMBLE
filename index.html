@@ -927,6 +927,7 @@
 /* ============================== utils =================================== */
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
 const W = 960, H = 540;
 const TAU = Math.PI * 2;
 
@@ -955,7 +956,9 @@ function saveBest(v) {
 
 /* 2D固定: 全キャラクターが同一の地面線に立ち、同一スケールで描画される */
 const GROUND_Y = H * 0.74;   /* キャラの足元が立つ地面線(画面Y) */
-const CHAR_SCALE = 1.5;      /* 大型キャラクター用ベーススケール */
+const CHAR_SCALE = 1.5;      /* ゲームロジック（当たり判定・攻撃距離）用ベーススケール。変更禁止 */
+const CHARACTER_RENDER_SCALE = 3.0; /* 描画専用倍率。CHAR_SCALEとは独立。
+   実測: 2.5 → 約60px、3.0 → 約72px (目標 64-80px) */
 const depthInfo = () => ({ scale: CHAR_SCALE, groundY: GROUND_Y });
 const AREA_SCROLL_SPEED = 360; /* 次面への自動スクロール速度(px/s) */
 const stageTheme = stageIndex => STAGES[stageIndex] ? STAGES[stageIndex].theme : "downtown";
@@ -1999,181 +2002,337 @@ function drawShadow(x, groundY, sc, alpha) {
   ctx.save();
   ctx.globalAlpha = alpha * 0.5;
   ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(x, groundY + 3, 24 * sc, 6 * sc, 0, 0, TAU);
-  ctx.fill();
+  const sw = Math.round(20 * sc);
+  const sh = Math.round(4 * sc);
+  ctx.fillRect(Math.round(x - sw / 2), groundY + 2, sw, sh);
+  ctx.fillRect(Math.round(x - sw / 2 + sh), groundY + 2 + sh, sw - sh * 2, sh);
   ctx.restore();
 }
 
-/* 棒人間を描画。pose は各部位の角度。robot=true で関節が赤く光る。
-   kind: "hero" | "ninja" | "robot" | undefined で見た目を切り替える */
+/* ==================== Pixel block character rendering ==================== */
+/* 16×16 logical pixel base, ~2-head proportion.
+   body parts are colored rect blocks with 1px black outline.
+   pose angles are used to shift arm/leg positions. */
+
+/* Helper: draw a single pixel block with 1px black outline */
+function pxBlock(lx, ly, w, h, fill) {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(lx - 1, ly - 1, w + 2, h + 2);
+  ctx.fillStyle = fill;
+  ctx.fillRect(lx, ly, w, h);
+}
+/* Helper: draw a block without outline (for overlays) */
+function pxBlockNoOl(lx, ly, w, h, fill) {
+  ctx.fillStyle = fill;
+  ctx.fillRect(lx, ly, w, h);
+}
+
+/* Return color palette for each character kind */
+function pixelPalette(kind, mainColor, jointColor) {
+  let skin = "#ffd9a8";       /* 肌色 */
+  let pants = "#1a1a2e";       /* ズボン */
+  let torso = mainColor;       /* 上着 (呼び出し元から渡されたcolor) */
+  let head = mainColor;
+  let joint = jointColor || "#ffffff";
+  let accent = joint;
+  const isRobot = kind === "robot" || kind === "midboss" || kind === "drone";
+  if (isRobot) {
+    skin = mainColor;
+    pants = mainColor;
+    torso = mainColor;
+    head = mainColor;
+    accent = jointColor || "#ff4a3a";
+  } else if (kind === "ninja") {
+    skin = "#1a1a24";
+    pants = "#16181f";
+    torso = "#16181f";
+    head = "#16181f";
+    accent = "#ff4a3a";
+  } else if (kind === "fighter") {
+    pants = "#ff4ec7";
+  } else if (kind === "kungfu") {
+    pants = "#ff4ec7";
+  } else if (kind === "hero") {
+    /* hero: blue jacket + dark pants (default) */
+  }
+  return { skin, pants, torso, head, joint, accent };
+}
+  /* ==================== Chibi mascot rendering =============================== */
+/* 「かわいい日本のデフォルメマスコット」の16×16ブロックキャラクター。
+   既存作品を模さない完全オリジナル。大きな頭・短く太い手足・黒1px輪郭。
+   マスク方式: 塗りセル集合を構築し、隣接する空きセルへ黒輪郭を描く。 */
+const chibiFace = "#ffd9a8";
+const chibiInk = "#000";
+function chibiPalette(kind, color, jointColor) {
+  const accent = jointColor || "#ffffff";
+  if (kind === "midboss") {
+    return { armor: color || "#6a6470", accent, face: chibiFace, shoes: accent };
+  }
+  if (kind === "fighter") {
+    const hair = color || "#b85cff";
+    return { hair, jacket: hair, pants: "#3a2343", face: chibiFace, accent, shoes: accent };
+  }
+  const main = color || "#3ecbff";
+  return { hair: main, jacket: main, pants: "#15222c", face: chibiFace, accent, shoes: accent };
+}
+function chibiRect(cells, x, y, w, h, col) {
+  for (let j = y; j < y + h; j++)
+    for (let i = x; i < x + w; i++) cells.set(i + "," + j, col);
+}
+/* 楕円ヘッド。rowColor: 行index=>色 の関数 か 固定色文字列 */
+function chibiHead(cells, cx, topY, w, h, rowColor) {
+  const half = w / 2;
+  for (let i = 0; i < h; i++) {
+    const t = (i + 0.5) / h;
+    const rad = half * Math.sqrt(Math.max(0.0001, 1 - (2 * t - 1) * (2 * t - 1)));
+    const s = Math.round(cx - rad), e = Math.round(cx + rad);
+    const col = typeof rowColor === "function" ? rowColor(i) : rowColor;
+    for (let x = s; x <= e; x++) cells.set(x + "," + (topY + i), col);
+  }
+}
+function chibiPose(pose) {
+  return {
+    lean: clamp((pose.lean || 0) * 3, -0.8, 0.8),
+    armFwd: Math.max(0, (pose.armFA || 0) - 0.85) * 3.2,  /* パンチ時 0..1 */
+    armBack: Math.max(0, (pose.armBA || 0) - 0.7) * 2.5,  /* 後ろへ振る */
+    legF: clamp((pose.legFA || 0) * 0.6, -0.8, 0.8),
+    legB: clamp((pose.legBA || 0) * 0.6, -0.8, 0.8),
+    punch: (pose.armFA || 0) > 0.85,
+    kick: (pose.legFA || 0) > 0.9
+  };
+}
+
+  /* 16×16 pixel block character drawing.
+   Same interface as old drawStick — keeps pose/kind/color/scale/facing/opacity. */
 function drawStick(o) {
+  if (o.kind === "hero" || o.kind === "fighter" || o.kind === "midboss") {
+    drawChibi(o);
+    return;
+  }
   const { x, groundY, scale, facing, color, pose, jointColor, robot, windup, kind } = o;
-  const isRobot = robot || kind === "robot";
+  const isRobot = robot || kind === "robot" || kind === "midboss" || kind === "drone";
   const isHero = kind === "hero";
   const isNinja = kind === "ninja";
+  const flashAll = o.flash || false;
   ctx.save();
   ctx.globalAlpha = o.opacity == null ? 1 : o.opacity;
   ctx.translate(x, groundY);
   ctx.scale(facing * scale, scale);
 
-  const B = {
-    headR: isHero ? 11 : (isRobot ? 11 : 9), neck: 4,
-    torso: isRobot ? 35 : 31,
-    shoulderHalf: isRobot ? 6 : 5, hipHalf: isRobot ? 5 : 4,
-    upperArm: 16, lowerArm: 15, thigh: 18, shin: 18
-  };
-  const L = a => ({ x: Math.sin(a), y: Math.cos(a) });
-  const leg = (a, bend, origin) => {
-    const p1 = L(a);
-    const jx = origin.x + p1.x * B.thigh, jy = origin.y + p1.y * B.thigh;
-    const a2 = a - bend;
-    return { jx, jy, tx: jx + Math.sin(a2) * B.shin, ty: jy + Math.cos(a2) * B.shin };
-  };
-  /* 足裏を地面にそろえ、骨盤をその上へ置く。左右の腰から脚を分ける。 */
-  const rawFA = leg(pose.legFA, pose.legFB, { x: B.hipHalf, y: 0 });
-  const rawBA = leg(pose.legBA, pose.legBB, { x: -B.hipHalf, y: 0 });
-  const hipY = -Math.max(rawFA.ty, rawBA.ty);
-  const hipF = { x: B.hipHalf, y: hipY };
-  const hipB = { x: -B.hipHalf, y: hipY };
-  const fA = leg(pose.legFA, pose.legFB, hipF);
-  const fB = leg(pose.legBA, pose.legBB, hipB);
-  const lean = pose.lean;
-  /* 重要: 胴体は腰から上へ伸ばす。これで頭・胴・脚が明確な人型になる。 */
-  const hip = { x: 0, y: hipY };
-  const shoulder = { x: hip.x - Math.sin(lean) * B.torso, y: hip.y - Math.cos(lean) * B.torso };
-  const shoulderF = { x: shoulder.x + B.shoulderHalf, y: shoulder.y };
-  const shoulderB = { x: shoulder.x - B.shoulderHalf, y: shoulder.y };
-  const headC = {
-    x: shoulder.x - Math.sin(lean) * (B.neck + B.headR * 0.45),
-    y: shoulder.y - Math.cos(lean) * (B.neck + B.headR * 0.45)
-  };
-  const arm = (a, bend, origin) => {
-    const p1 = L(a);
-    const jx = origin.x + p1.x * B.upperArm, jy = origin.y + p1.y * B.upperArm;
-    const a2 = a - bend;
-    return { jx, jy, tx: jx + Math.sin(a2) * B.lowerArm, ty: jy + Math.cos(a2) * B.lowerArm };
-  };
-  const aF = arm(pose.armFA, pose.armFB, shoulderF);
-  const aB = arm(pose.armBA, pose.armBB, shoulderB);
+  const pal = pixelPalette(kind, color, jointColor);
 
-  const lw = isRobot ? 7 : 5;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  /* ---- Pose interpretation ---- */
+  const lean = pose.lean || 0;
+  const armFwd = Math.max(0, pose.armFA - 0.3) * 1.8;   /* 0~1: 腕を前方へ出す度合い */
+  const armBackSw = Math.max(0, -pose.armBA - 0.3) * 1.5; /* back arm swings back */
+  const legFwd = clamp(pose.legFA * 0.6, -0.8, 0.8);      /* 前脚の前後位置 */
+  const legBwd = clamp(pose.legBA * 0.6, -0.8, 0.8);      /* 後脚の前後位置 */
 
-  /* 各部位のパスをまとめて扱い、輪郭(黒) → 本体色の順で描く */
-  const segs = {
-    backArm: [[shoulderB.x, shoulderB.y], [aB.jx, aB.jy], [aB.tx, aB.ty]],
-    torso: [[hip.x, hip.y], [shoulder.x, shoulder.y]],
-    frontLeg: [[hipF.x, hipF.y], [fA.jx, fA.jy], [fA.tx, fA.ty]],
-    backLeg: [[hipB.x, hipB.y], [fB.jx, fB.jy], [fB.tx, fB.ty]],
-    frontArm: [[shoulderF.x, shoulderF.y], [aF.jx, aF.jy], [aF.tx, aF.ty]]
-  };
-  const strokeLimb = (seg, style, w) => {
-    ctx.strokeStyle = style;
-    ctx.lineWidth = w;
-    ctx.beginPath();
-    ctx.moveTo(seg[0][0], seg[0][1]);
-    for (let i = 1; i < seg.length; i++) ctx.lineTo(seg[i][0], seg[i][1]);
-    ctx.stroke();
-  };
+  /* Helper: pick color (handle flash) */
+  const c = (base) => flashAll ? "#ffffff" : base;
 
-  /* 主人公は黒い輪郭を先に太く描いてから、青い本体を重ねる */
-  if (isHero) {
-    for (const k of ["backArm", "torso", "frontLeg", "backLeg", "frontArm"]) strokeLimb(segs[k], "#000", lw + 4);
-  }
+  /* ---- Base block layout (16×16 logical grid) ---- */
+  /* 2-head proportion: head ≈ 8px, body+legs ≈ 8px.
+     Origin (0,0) = center bottom of feet. Y goes up = negative. */
 
-  /* 後ろの腕 */
-  strokeLimb(segs.backArm, shade(color, isRobot ? 0.75 : 0.6), lw);
-  /* 肩幅・胴・骨盤を描き、一本線ではない読みやすい人体シルエットにする */
-  strokeLimb([[shoulderB.x, shoulderB.y], [shoulderF.x, shoulderF.y]], shade(color, 0.9), lw + 1);
-  strokeLimb(segs.torso, color, lw + 3);
-  strokeLimb([[hipB.x, hipB.y], [hipF.x, hipF.y]], shade(color, 0.82), lw + 1);
-  /* 脚 */
-  strokeLimb(segs.frontLeg, shade(color, 1), lw);
-  strokeLimb(segs.backLeg, shade(color, isRobot ? 0.72 : 0.82), lw);
-  /* 前の腕 */
-  strokeLimb(segs.frontArm, color, lw);
+  /* HEAD: big, 7×8 pixels */
+  const headX = Math.round(-3 + lean * 1.5);
+  const headY = -15;
+  pxBlock(headX, headY, 7, 8, c(pal.head));
 
-  /* ロボット: 胸部装甲プレートと肩パッド */
-  if (isRobot) {
-    const cx = (hip.x + shoulder.x) * 0.5;
-    const cy = (hip.y + shoulder.y) * 0.5;
-    ctx.fillStyle = "#8a93a3";
-    ctx.strokeStyle = "#242a36";
-    ctx.lineWidth = 2;
-    ctx.fillRect(cx - 9, cy - 14, 18, 26);
-    ctx.strokeRect(cx - 9, cy - 14, 18, 26);
-    ctx.fillStyle = "#98a2b2";
-    ctx.beginPath();
-    ctx.arc(shoulder.x, shoulder.y, 5.5, 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-  }
+  /* TORSO: 5×4 */
+  pxBlock(-2, -8, 5, 4, c(pal.torso));
 
-  /* 頭 */
-  ctx.fillStyle = shade(color, 1.1);
-  ctx.beginPath();
-  ctx.arc(headC.x, headC.y, B.headR, 0, TAU);
-  ctx.fill();
-  if (isHero) {
-    /* 黒い輪郭 */
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(headC.x, headC.y, B.headR + 1, 0, TAU);
-    ctx.stroke();
-    /* 白ハイライト */
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.beginPath();
-    ctx.arc(headC.x + B.headR * 0.55, headC.y - 1, 1.8, 0, TAU);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(headC.x - B.headR * 0.4, headC.y + B.headR * 0.45, 1.3, 0, TAU);
-    ctx.fill();
-  } else if (isNinja) {
-    /* 赤い目 */
-    ctx.fillStyle = "#ff2e2e";
-    ctx.shadowColor = "#ff2e2e";
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(headC.x + B.headR * 0.45, headC.y - 2, 1.8, 0, TAU);
-    ctx.arc(headC.x + B.headR * 0.45, headC.y + 2, 1.8, 0, TAU);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  } else if (isRobot) {
-    ctx.fillStyle = jointColor;
-    ctx.shadowColor = jointColor;
-    ctx.shadowBlur = 10;
-    ctx.fillRect(headC.x + 2, headC.y - 3, 8, 5);
-    ctx.shadowBlur = 0;
-  } else {
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(headC.x + B.headR * 0.55, headC.y - 1, 1.8, 0, TAU);
-    ctx.fill();
-  }
-  /* 関節 */
-  if (robot || o.flash) {
-    ctx.fillStyle = jointColor;
-    ctx.shadowColor = jointColor;
-    ctx.shadowBlur = robot ? 12 : 6;
-    for (const [jx, jy] of [[hip.x, hip.y], [shoulder.x, shoulder.y], [fA.jx, fA.jy], [fB.jx, fB.jy], [aF.jx, aF.jy], [aB.jx, aB.jy]]) {
-      ctx.beginPath();
-      ctx.arc(jx, jy, robot ? 3.4 : 2.2, 0, TAU);
-      ctx.fill();
+  /* HIPS: 7×1 connector */
+  pxBlock(-3, -4, 7, 1, c(pal.pants));
+
+  /* ---- Legs ---- */
+  const legLX = Math.round(-3 + legFwd * 1.5);
+  const legRX = Math.round(1 + legBwd * 1.5);
+  pxBlock(legLX, -3, 2, 3, c(pal.pants));
+  pxBlock(legRX, -3, 2, 3, c(pal.pants));
+
+  /* ---- Back arm (left side when facing right) ---- */
+  const bakX = Math.round(-5 - armBackSw * 1.5);
+  const bakY = -8 + (armBackSw > 0.3 ? 1 : 0);
+  pxBlock(bakX, bakY, 2, 4, c(isNinja ? pal.accent : pal.torso));
+
+  /* ---- Front arm ---- */
+  if (armFwd > 0.25) {
+    /* Punch / attack: arm extends forward, becomes horizontal */
+    const ext = Math.round(2 + armFwd * 4);
+    pxBlock(3, -8, ext, 2, c(isNinja ? pal.accent : pal.torso));
+    /* Fist: small skin block at tip */
+    if (!flashAll && !isRobot) {
+      pxBlockNoOl(3 + ext - 1, -8, 2, 2, pal.skin);
     }
-    ctx.shadowBlur = 0;
+  } else {
+    /* Arm down at side */
+    pxBlock(3, -8, 2, 4, c(isNinja ? pal.accent : pal.torso));
+    /* Hand */
+    if (!flashAll && !isRobot) {
+      pxBlockNoOl(3, -5, 2, 1, pal.skin);
+    }
   }
-  /* ロボットの予備動作中はコアが明滅 */
-  if (robot && windup > 0) {
-    ctx.fillStyle = `rgba(255,60,40,${0.3 + windup * 0.6})`;
-    ctx.shadowColor = "#ff2020";
-    ctx.shadowBlur = 18 * windup;
-    ctx.beginPath();
-    ctx.arc(hip.x - Math.sin(lean) * B.torso * 0.45, hip.y - Math.cos(lean) * B.torso * 0.45, 5 + windup * 3, 0, TAU);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+
+  /* ---- Eyes ---- */
+  if (!flashAll) {
+    if (isRobot || isNinja) {
+      ctx.fillStyle = pal.accent;
+      ctx.shadowColor = pal.accent;
+      ctx.shadowBlur = 5;
+      ctx.fillRect(0, -13, 2, 2);
+      ctx.shadowBlur = 0;
+    } else if (isHero) {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, -13, 2, 2);
+      /* Hero hair (top of head) */
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(headX + 1, headY - 1, 5, 2);
+    } else {
+      /* Fighter / kungfu / others: simple eyes */
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, -13, 2, 2);
+    }
+  }
+
+  /* ---- Robot: chest plate + shoulder pads ---- */
+  if (isRobot && !flashAll) {
+    /* Chest plate */
+    ctx.fillStyle = pal.accent;
+    ctx.fillRect(-4, -7, 8, 3);
+    ctx.fillStyle = pal.skin;
+    ctx.fillRect(-5, -8, 10, 1);
+    /* Shoulder pads */
+    ctx.fillStyle = pal.accent;
+    ctx.fillRect(-6, -9, 3, 3);
+    ctx.fillRect(3, -9, 3, 3);
+    /* Windup core glow */
+    if (windup > 0) {
+      ctx.fillStyle = `rgba(255,60,40,${0.3 + windup * 0.6})`;
+      ctx.shadowColor = "#ff2020";
+      ctx.shadowBlur = 6 * windup;
+      ctx.fillRect(-1, -7, 2, 2);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  ctx.restore();
+}
+
+/* ==================== Chibi body builders ==================== */
+/* hero / fighter 共用の小柄ボディ(短いジャケット・短く太い手足) */
+function chibiSmallBody(cells, p, pal) {
+  const hx = Math.round(p.lean);
+  const backX = hx - 5 - Math.round(p.armBack);
+  const lOff = Math.round(p.legF * 2.5);
+  const bOff = Math.round(p.legB * 2.5);
+  const fLift = Math.abs(p.legF) > 0.4 ? 1 : 0;
+  const bLift = Math.abs(p.legB) > 0.4 ? 1 : 0;
+  chibiRect(cells, hx - 3, -6, 6, 3, pal.jacket);   /* torso */
+  chibiRect(cells, hx, -5, 1, 2, pal.accent);       /* zipper */
+  chibiRect(cells, backX, -6, 2, 3, pal.jacket);    /* back arm */
+  chibiRect(cells, backX, -4, 2, 1, pal.accent);    /* glove */
+  if (p.punch) {
+    const ext = Math.round(2 + p.armFwd * 3);       /* stretched punch */
+    chibiRect(cells, hx + 3, -6, ext + 2, 2, pal.jacket);
+    chibiRect(cells, hx + 3 + ext, -6, 2, 2, pal.accent);  /* fist */
+  } else {
+    chibiRect(cells, hx + 3, -6, 2, 3, pal.jacket); /* front arm */
+    chibiRect(cells, hx + 3, -4, 2, 1, pal.accent); /* glove */
+  }
+  chibiRect(cells, hx - 2 + bOff, -3 + bLift, 2, 3 - bLift, pal.pants);
+  chibiRect(cells, hx + lOff, -3 + fLift, 2, 3 - fLift, pal.pants);
+  if (p.kick) chibiRect(cells, hx + 2 + lOff, -3, 3, 2, pal.pants); /* kick leg */
+  chibiRect(cells, hx - 2 + bOff, -1, 2, 1, pal.shoes);
+  chibiRect(cells, hx + lOff, -1, 2, 1, pal.shoes);
+}
+function buildChibiHero(cells, pose, pal) {
+  const p = chibiPose(pose);
+  const hx = Math.round(p.lean);
+  chibiHead(cells, hx, -14, 10, 9, i => i < 3 ? pal.hair : pal.face);
+  cells.set(hx + "," + (-15), pal.hair);            /* cowlick */
+  cells.set((hx - 2) + "," + (-14), pal.accent);    /* hair shine */
+  chibiRect(cells, hx - 3, -10, 2, 2, chibiInk);    /* eyes */
+  chibiRect(cells, hx + 2, -10, 2, 2, chibiInk);
+  cells.set(hx + "," + (-7), chibiInk);             /* mouth */
+  chibiSmallBody(cells, p, pal);
+}
+function buildChibiFighter(cells, pose, pal) {
+  const p = chibiPose(pose);
+  const hx = Math.round(p.lean);
+  chibiHead(cells, hx, -13, 8, 7, i => i < 2 ? pal.hair : pal.face);
+  cells.set((hx - 1) + "," + (-15), pal.hair);      /* spikes */
+  cells.set((hx + 1) + "," + (-15), pal.hair);
+  cells.set(hx + "," + (-16), pal.hair);
+  chibiRect(cells, hx - 5, -12, 2, 4, pal.hair);    /* side hair */
+  chibiRect(cells, hx + 4, -12, 2, 4, pal.hair);
+  chibiRect(cells, hx - 3, -11, 7, 1, pal.accent);  /* headband */
+  chibiRect(cells, hx - 3, -9, 2, 2, chibiInk);     /* eyes */
+  chibiRect(cells, hx + 1, -9, 2, 2, chibiInk);
+  cells.set(hx + "," + (-6), chibiInk);             /* mouth */
+  chibiSmallBody(cells, p, pal);
+}
+function buildChibiMidBoss(cells, pose, pal) {
+  const p = chibiPose(pose);
+  chibiHead(cells, 0, -15, 12, 9, pal.armor);       /* round helmet */
+  chibiRect(cells, -7, -11, 2, 2, pal.armor);       /* brim */
+  chibiRect(cells, 6, -11, 2, 2, pal.armor);
+  chibiRect(cells, -3, -13, 7, 1, pal.accent);      /* helmet crest */
+  chibiRect(cells, -4, -9, 8, 4, pal.face);         /* face patch */
+  chibiRect(cells, -3, -8, 2, 2, chibiInk);         /* flat eyes */
+  chibiRect(cells, 2, -8, 2, 2, chibiInk);
+  chibiRect(cells, -5, -6, 10, 4, pal.armor);       /* armor body */
+  chibiRect(cells, -5, -4, 10, 1, pal.accent);      /* belt */
+  chibiRect(cells, -8, -6, 3, 3, pal.accent);       /* shoulder pad L */
+  chibiRect(cells, -7, -5, 1, 1, pal.armor);
+  chibiRect(cells, 6, -6, 3, 3, pal.accent);        /* shoulder pad R */
+  chibiRect(cells, 7, -5, 1, 1, pal.armor);
+  chibiRect(cells, -7, -3, 2, 3, pal.armor);        /* back arm */
+  chibiRect(cells, -7, -1, 2, 1, pal.shoes);
+  if (p.punch) {
+    const ext = Math.round(2 + p.armFwd * 2);
+    chibiRect(cells, 5, -4, ext + 2, 2, pal.armor); /* front arm punch */
+    chibiRect(cells, 5 + ext, -4, 2, 2, pal.accent);
+  } else {
+    chibiRect(cells, 5, -3, 2, 3, pal.armor);
+    chibiRect(cells, 5, -1, 2, 1, pal.shoes);
+  }
+  const lOff = Math.round(p.legF * 1.8);
+  const bOff = Math.round(p.legB * 1.8);
+  chibiRect(cells, -4 + bOff, -3, 4, 3, pal.armor); /* leg back */
+  chibiRect(cells, 0 + lOff, -3, 4, 3, pal.armor);  /* leg front */
+  chibiRect(cells, -4 + bOff, -1, 4, 1, pal.shoes);
+  chibiRect(cells, 0 + lOff, -1, 4, 1, pal.shoes);
+  cells.set("0,-6", chibiInk);                      /* small mouth (on armor) */
+}
+function drawChibi(o) {
+  const cells = new Map();
+  const pose = o.pose || {};
+  const pal = chibiPalette(o.kind, o.color, o.jointColor);
+  if (o.kind === "fighter") buildChibiFighter(cells, pose, pal);
+  else if (o.kind === "midboss") buildChibiMidBoss(cells, pose, pal);
+  else buildChibiHero(cells, pose, pal);
+
+  ctx.save();
+  ctx.globalAlpha = o.opacity == null ? 1 : o.opacity;
+  ctx.translate(o.x, o.groundY);
+  ctx.scale(o.facing * o.scale, o.scale);
+  /* 黒1px輪郭: 塗りセルに隣接する空きセルへ */
+  ctx.fillStyle = chibiInk;
+  for (const k of cells.keys()) {
+    const c = k.indexOf(",");
+    const cx = Number(k.slice(0, c)), cy = Number(k.slice(c + 1));
+    if (!cells.has((cx + 1) + "," + cy)) ctx.fillRect(cx + 1, cy, 1, 1);
+    if (!cells.has((cx - 1) + "," + cy)) ctx.fillRect(cx - 1, cy, 1, 1);
+    if (!cells.has(cx + "," + (cy + 1))) ctx.fillRect(cx, cy + 1, 1, 1);
+    if (!cells.has(cx + "," + (cy - 1))) ctx.fillRect(cx, cy - 1, 1, 1);
+  }
+  const flash = o.flash ? "#ffffff" : null;
+  for (const [k, col] of cells) {
+    const c = k.indexOf(",");
+    ctx.fillStyle = flash || col;
+    ctx.fillRect(Number(k.slice(0, c)), Number(k.slice(c + 1)), 1, 1);
   }
   ctx.restore();
 }
@@ -2374,7 +2533,7 @@ class Player {
   trailSnapshot() {
     const g = depthInfo();
     return {
-      x: this.x, groundY: g.groundY - this.z, scale: g.scale,
+      x: this.x, groundY: g.groundY - this.z, scale: g.scale * CHARACTER_RENDER_SCALE,
       facing: this.facing, color: "#3ecbff", pose: this.pose(),
       robot: false, kind: "hero", jointColor: "#9fe6ff"
     };
@@ -2449,9 +2608,9 @@ class Player {
     const flashing = this.flash > 0;
     const blink = this.invincible > 0 && Math.floor(this.game.time * 18) % 2 === 0;
     const col = flashing ? "#ffffff" : (blink ? "rgba(120,220,255,0.5)" : "#3ecbff");
-    drawShadow(this.x, g.groundY, 0.5 + this.y * 0.9, 0.4);
+    drawShadow(this.x, g.groundY, (0.5 + this.y * 0.9) * CHARACTER_RENDER_SCALE, 0.4);
     drawStick({
-      x: this.x, groundY: sy, scale: g.scale, facing: this.facing,
+      x: this.x, groundY: sy, scale: g.scale * CHARACTER_RENDER_SCALE, facing: this.facing,
       color: col, pose: this.pose(), jointColor: "#9fe6ff",
       robot: false, kind: "hero", flash: flashing, windup: 0
     });
@@ -2641,9 +2800,9 @@ class Enemy {
     }
     const col = this.flash > 0 ? "#ffffff" : this.color;
     const jc = this.flash > 0 ? "#ffffff" : this.jointColor;
-    drawShadow(this.x, g.groundY, (0.5 + this.y * 0.9) * this.scaleBias, 0.4);
+    drawShadow(this.x, g.groundY, (0.5 + this.y * 0.9) * this.scaleBias * CHARACTER_RENDER_SCALE, 0.4);
     drawStick({
-      x: this.x, groundY: sy, scale, facing: this.facing,
+      x: this.x, groundY: sy, scale: scale * CHARACTER_RENDER_SCALE, facing: this.facing,
       color: col, pose: this.pose(), jointColor: jc,
       robot: this.robot, kind: this.type, flash: this.flash > 0,
       windup: this.windup > 0 ? this.windupProgress : 0,
@@ -2706,7 +2865,7 @@ class Ninja extends Enemy {
       this.trailTimer = 0.03;
       const g = depthInfo();
       this.game.effects.ghost({
-        x: this.x, groundY: g.groundY, scale: g.scale * this.scaleBias,
+        x: this.x, groundY: g.groundY, scale: g.scale * this.scaleBias * CHARACTER_RENDER_SCALE,
         facing: this.facing, color: "#16181f", pose: this.pose(),
         robot: false, kind: "ninja", jointColor: "#ff4a3a"
       }, 0.25);

@@ -174,3 +174,6 @@
 *.lz
 *.lzma
 *.iso
+
+# Development screenshots (not committed)
+screenshots/
