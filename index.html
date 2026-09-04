@@ -509,7 +509,7 @@
     box-shadow: 0 0 12px rgba(120,255,180,0.25);
   }
   /* 拾う・武器切替: 攻撃の左隣にまとめてクラスタ化 */
-  #touch-ui .b-pickup, #touch-ui .b-switch {
+  #touch-ui .b-pickup, #touch-ui .b-switch, #touch-ui .b-guard {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
@@ -551,6 +551,19 @@
   }
   #touch-ui .b-switch:active, #touch-ui .b-switch.active { filter: brightness(1.55); transform: scale(0.94); }
 
+  #touch-ui .b-guard {
+    right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
+    bottom: max(72px, calc(env(safe-area-inset-bottom, 0px) + 60px));
+    width: 60px; height: 60px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #9fe6ff;
+    border: 2px solid rgba(120,210,255,0.55);
+    background: rgba(10,32,55,0.48);
+    box-shadow: 0 0 12px rgba(100,200,255,0.3);
+  }
+  #touch-ui .b-guard:active, #touch-ui .b-guard.active { filter: brightness(1.55); transform: scale(0.94); }
+
   /* ---- スマホ(横持ち): 画面が低いのでボタンを小さくして画面を隠さない ---- */
   @media (orientation: landscape) and (max-height: 500px) {
     #touch-ui .b-atk {
@@ -575,6 +588,12 @@
       right: max(80px, calc(env(safe-area-inset-right, 0px) + 72px));
       bottom: max(78px, calc(env(safe-area-inset-bottom, 0px) + 66px));
       width: 44px; height: 34px;
+      font-size: 9px;
+    }
+    #touch-ui .b-guard {
+      right: max(130px, calc(env(safe-area-inset-right, 0px) + 122px));
+      bottom: max(44px, calc(env(safe-area-inset-bottom, 0px) + 34px));
+      width: 42px; height: 42px;
       font-size: 9px;
     }
     /* 横持ちではレバーも小型化 */
@@ -612,6 +631,7 @@
     #touch-ui .b-jump { width: 72px; height: 72px; font-size: 13px; }
     #touch-ui .b-pickup { width: 72px; height: 72px; font-size: 12px; }
     #touch-ui .b-switch { width: 60px; height: 60px; font-size: 12px; }
+    #touch-ui .b-guard { width: 62px; height: 62px; font-size: 12px; }
     /* 武器スロット5種を縦持ちで収めるため小型化 */
     #weapon-slots { bottom: 10px; gap: 4px; }
     #weapon-slots .wslot { min-width: 40px; padding: 3px 5px; font-size: 8px; }
@@ -636,6 +656,11 @@
       position: absolute;
       right: max(100px, calc(env(safe-area-inset-right, 0px) + 90px));
       bottom: max(122px, calc(env(safe-area-inset-bottom, 0px) + 108px));
+    }
+    #touch-ui .b-guard {
+      position: absolute;
+      right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
+      bottom: max(72px, calc(env(safe-area-inset-bottom, 0px) + 60px));
     }
   }
   /* ---- overlays ---- */
@@ -859,6 +884,7 @@
         <button class="b-atk" data-action="attack" aria-label="攻撃">攻撃</button>
         <button class="b-pickup" data-action="pickup" aria-label="拾う">拾う</button>
         <button class="b-switch" data-action="switch" aria-label="武器切替">武器</button>
+        <button class="b-guard" data-action="guard" aria-label="防御">防御</button>
       </div>
 
       <!-- Title -->
@@ -872,9 +898,10 @@
           <span class="k">A D / ← →</span><span>移動</span>
           <span class="k">J</span><span>攻撃（連続コンボ）</span>
           <span class="k">K</span><span>ジャンプ（空中でJ=飛び蹴り）</span>
-          <span class="k">E</span><span>武器を拾う</span>
+          <span class="k">P</span><span>武器を拾う</span>
           <span class="k">Q</span><span>武器切替</span>
-          <span class="k">P</span><span>ポーズ</span>
+          <span class="k">L</span><span>防御（押している間）</span>
+          <span class="k">ESC</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
         </div>
@@ -1124,6 +1151,7 @@ class Input {
     this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;   /* 武器切替(Q / スマホ切替ボタン) */
+    this.guardHeld = false;       /* 防御(L / スマホ防御ボタン) */
     this.attackRepeat = 0; /* 長押し連続攻撃用タイマー */
     this.attackRepeatDelay = 0.30;
   }
@@ -1147,7 +1175,7 @@ class Input {
   }
   reset() {
     this.left = this.right = false;
-    this.attackHeld = this.jumpHeld = false;
+    this.attackHeld = this.jumpHeld = this.guardHeld = false;
     this.attackPressed = this.jumpPressed = this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;
@@ -1167,9 +1195,10 @@ addEventListener("keydown", e => {
   if (e.code === "KeyJ" || e.code === "Space") { input.attackHeld = true; input.attackPressed = true; }
   if (e.code === "KeyK") { input.jumpHeld = true; input.jumpPressed = true; }
   
-  if (e.code === "KeyE") input.pickupPressed = true;
+  if (e.code === "KeyP") input.pickupPressed = true;
   if (e.code === "KeyQ") input.switchPressed = true;   /* 武器切替 */
-  if (e.code === "KeyP") game.togglePause();   /* ポーズ */
+  if (e.code === "KeyL") input.guardHeld = true;
+  if (e.code === "Escape") game.togglePause();   /* ポーズ */
   if (e.code === "Enter" || e.code === "KeyZ") {
     if (game.state === "playing" && game.paused) game.togglePause();
     else input.startPressed = true;
@@ -1184,6 +1213,7 @@ addEventListener("keyup", e => {
   if (keyMap[e.code]) input[keyMap[e.code]] = false;
   if (e.code === "KeyJ" || e.code === "Space") input.attackHeld = false;
   if (e.code === "KeyK") input.jumpHeld = false;
+  if (e.code === "KeyL") input.guardHeld = false;
 });
 
 /* --- タッチ操作: 仮想レバー + アクションボタン --- */
@@ -1206,6 +1236,7 @@ function bindTouchBtn(btn, kind) {
     else if (kind === "jump") { input.jumpHeld = true; input.jumpPressed = true; }
     else if (kind === "pickup") input.pickupPressed = true;
     else if (kind === "switch") input.switchPressed = true;
+    else if (kind === "guard") input.guardHeld = true;
   };
   const off = e => {
     if (activePointer !== e.pointerId) return;
@@ -1214,6 +1245,7 @@ function bindTouchBtn(btn, kind) {
     btn.classList.remove("active");
     if (kind === "attack") input.attackHeld = false;
     else if (kind === "jump") input.jumpHeld = false;
+    else if (kind === "guard") input.guardHeld = false;
   };
   btn.addEventListener("pointerdown", on);
   btn.addEventListener("pointerup", off);
@@ -1842,7 +1874,7 @@ class PickupWeapon {
     this.rotation = rand(0, TAU);
     this.rotationSpeed = rand(-3, 3);
     this.alive = true;
-    this.pickupRadius = 28;
+    this.pickupRadius = 72;
   }
 
   update(dt) {
@@ -1855,10 +1887,13 @@ class PickupWeapon {
 
   render() {
     const d = depthInfo();
-    const rx = this.x - this.game.cameraX;
+    const rx = this.x;
     const ry = d.groundY - 12 - this.z * d.scale;
-    const s = d.scale * 0.35;
+    const near = Math.abs(this.game.player.x - this.x) < this.pickupRadius * 1.6;
+    const pulse = 1 + Math.sin(this.game.time * 8) * 0.12;
+    const s = d.scale * 0.35 * pulse * (near ? 1.45 : 1);
     ctx.save();
+    ctx.globalAlpha = 0.78 + Math.sin(this.game.time * 10) * 0.18;
     ctx.translate(rx, ry);
     ctx.scale(s, s);
     ctx.rotate(this.rotation);
@@ -2377,7 +2412,7 @@ class Player {
     this.vx = 0;
     this.facing = 1;
     this.hp = 100; this.maxHp = 100;
-    this.state = "idle";     /* idle | run | attack | jump | dead */
+    this.state = "idle";     /* idle | run | guard | attack | jump | dead */
     this.stateTime = 0;
     this.anim = 0;
     this.comboStep = 0;
@@ -2456,6 +2491,18 @@ class Player {
 
     const grounded = this.z <= 0;
 
+    /* --- 防御: 地上でL/防御ボタンを押している間。移動・攻撃は止める --- */
+    const wantsGuard = grounded && input.guardHeld &&
+      (this.state === "idle" || this.state === "run" || this.state === "guard");
+    if (wantsGuard && this.state !== "guard") {
+      this.state = "guard";
+      this.stateTime = 0;
+      this.attackData = null;
+    } else if (!wantsGuard && this.state === "guard") {
+      this.state = "idle";
+      this.stateTime = 0;
+    }
+
     /* --- 左右移動 --- */
     if (this.state === "idle" || this.state === "run") {
       let dir = 0;
@@ -2468,6 +2515,8 @@ class Player {
       this.anim += dt * (dir !== 0 ? 10 : 0);
       this.state = dir !== 0 ? "run" : "idle";
       if (dir !== 0) this.anim += dt * 10;
+    } else if (this.state === "guard") {
+      this.vx = lerp(this.vx, 0, clamp(dt * 16, 0, 1));
     } else if (this.state === "attack") {
       const spd = this.attackData && this.attackData.speed ? this.attackData.speed : 100;
       this.vx = lerp(this.vx, this.facing * spd, clamp(dt * (spd > 100 ? 2 : 6), 0, 1));
@@ -2556,7 +2605,7 @@ class Player {
   }
 
   startAttack() {
-    if (!this.alive || this.state === "dead") return;
+    if (!this.alive || this.state === "dead" || this.state === "guard" || input.guardHeld) return;
     let idx;
     if (this.z > 5 || this.state === "jump") idx = 4;          /* 空中攻撃 = 飛び蹴り */
     else { idx = this.comboStep; this.comboStep = (this.comboStep + 1) % 4; }
@@ -2572,7 +2621,7 @@ class Player {
   
 
   jump() {
-    if (!this.alive || this.state === "dead" || this.state === "jump") return;
+    if (!this.alive || this.state === "dead" || this.state === "jump" || this.state === "guard" || input.guardHeld) return;
     this.state = "jump";
     this.stateTime = 0;
     this.attackData = null;
@@ -2583,6 +2632,25 @@ class Player {
 
   hurt(dmg, fromX) {
     if (this.invincible > 0 || !this.alive) return;
+    const incomingDir = fromX > this.x ? 1 : -1;
+    const blocking = this.state === "guard" && this.z <= 0 && incomingDir === this.facing;
+    if (blocking) {
+      const chip = Math.max(1, Math.ceil(dmg * 0.2));
+      this.hp = Math.max(0, this.hp - chip);
+      this.invincible = 0.22;
+      this.flash = 0.08;
+      const g = depthInfo();
+      this.game.effects.spark(this.x + this.facing * 24, g.groundY - 62 * g.scale, this.y, "#9fe6ff", 8, 180);
+      this.game.effects.text(this.x, g.groundY - 92 * g.scale, this.y, "BLOCK -" + chip, "#9fe6ff");
+      this.game.shake = Math.max(this.game.shake, 3);
+      sfx("hit", 0.16);
+      if (this.hp <= 0) {
+        this.state = "dead";
+        this.alive = false;
+        this.game.effects.ring(this.x, g.groundY - 50 * g.scale, this.y, "#ff4d4d", 60);
+      }
+      return;
+    }
     this.hp = Math.max(0, this.hp - dmg);
     this.invincible = 1.1;
     this.flash = 0.2;
@@ -2632,6 +2700,9 @@ class Player {
         legFA: ph * 0.7, legFB: 0.35, legBA: ph2 * 0.7, legBB: 0.35,
         armFA: -ph2 * 0.7, armBA: -ph * 0.7, lean: 0.16
       };
+    }
+    if (this.state === "guard") {
+      return { ...base, lean: -0.08, armFA: 0.92, armFB: 0.16, armBA: 0.7, armBB: 0.2, legFA: 0.28, legBA: -0.28 };
     }
     if (this.state === "attack" && this.attackData) {
       const d = this.attackData, t = this.stateTime;
@@ -3165,6 +3236,7 @@ class Game {
     this.effects = new HitEffect();
     this.combo = new Combo();
     this.droppedWeapons = [];
+    this.areaWeaponDropped = false;
     this.nearestEnemy = null;
     this.areaIndex = 0;
     this.stageIndex = 0;
@@ -3204,6 +3276,7 @@ class Game {
     this.areaIndex = index;
     this.areaLocked = true;
     this.areaResolved = false;
+    this.areaWeaponDropped = false;
     this.areaScroll = 0;
     this.enemies.length = 0;
     for (const spec of stage.areas[index].enemies) this.enemies.push(this.makeStageEnemy(spec));
@@ -3237,6 +3310,7 @@ class Game {
         this.stageIndex++;
         this.bossActive = false;
         this.autoScroll = false;
+        this.cameraX = 0;
         buildBackground(stageTheme(this.stageIndex));
         this.startArea(0);
         this.showStageMessage(STAGES[this.stageIndex].name + " START", 2.2);
@@ -3259,6 +3333,7 @@ class Game {
     this.bossActive = true;
     this.areaLocked = true;
     this.areaResolved = false; /* 中ボス撃破を別の遭遇として判定する */
+    this.areaWeaponDropped = false;
     const boss = this.makeBoss(stage.boss);
     this.enemies.push(boss);
     el.stage.textContent = stage.name + " · MID BOSS";
@@ -3280,6 +3355,7 @@ class Game {
     this.effects.reset();
     this.combo.resetAll();
     this.droppedWeapons.length = 0;
+    this.areaWeaponDropped = false;
     this.stageIndex = 0;
     this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
     this.areaScroll = 0; this.cameraX = 0; this.autoScroll = false; this.bossActive = false;
@@ -3381,11 +3457,15 @@ class Game {
       if (!e.alive) {
         e.deathTime -= dt;
         if (e.deathTime <= 0) {
-          // 敵が死んだら武器をドロップ (30%確率)
-          if (Math.random() < 0.3) {
+          /* 武器ドロップ: 後半ほど確率を上げ、各遭遇で最低1個は保証する */
+          const otherAlive = this.enemies.some((other, j) => j !== i && other.alive);
+          const dropChance = Math.min(0.75, 0.5 + this.stageIndex * 0.1);
+          const shouldDrop = (!this.areaWeaponDropped && !otherAlive) || Math.random() < dropChance;
+          if (shouldDrop) {
             const weaponTypes = Object.keys(WEAPON_SPECS);
             const type = choice(weaponTypes);
             this.droppedWeapons.push(new PickupWeapon(this, type, e.x, 20));
+            this.areaWeaponDropped = true;
           }
           this.enemies.splice(i, 1);
         }
@@ -3407,7 +3487,7 @@ class Game {
         sfx("ui");
       }
     }
-    /* プレイヤーが武器を拾う (Eキー / タッチ「拾う」ボタン) */
+    /* プレイヤーが武器を拾う (Pキー / タッチ「拾う」ボタン) */
     if (input.pickupPressed) {
       for (let i = this.droppedWeapons.length - 1; i >= 0; i--) {
         const w = this.droppedWeapons[i];
@@ -3427,7 +3507,7 @@ class Game {
     }
 
     /* Areaの敵を全滅させたときだけ右進行を解放。AREA 4後は中ボスへ。 */
-    if (!this.areaResolved && !this.enemies.some(e => e.alive)) this.resolveCurrentEncounter();
+    if (!this.areaResolved && this.enemies.length === 0) this.resolveCurrentEncounter();
     /* 敵全滅後の自動スクロール(キャラはその場に立ち、背景を流して次面へ)。 */
     if (this.autoScroll) this.advanceAreaScroll(AREA_SCROLL_SPEED * dt);
     if (this.messageTimer > 0) {
@@ -3717,5 +3797,3 @@ requestAnimationFrame(now => game.frame(now));
 </script>
 </body>
 </html>
-
-      

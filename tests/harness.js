@@ -200,8 +200,8 @@ function ok(cond, msg) {
 function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, WEAPON_SPECS };", sandbox);
-  const { game, input, WEAPON_SPECS, KungFu, Drone } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS };", sandbox);
+  const { game, input, WEAPON_SPECS, KungFu, Drone, PickupWeapon } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -278,6 +278,37 @@ function run() {
   game.player.inventory.staff = 1;
   game.player.equipWeapon("staff");
   ok(game.player.currentWeapon === "staff", "staff weapon equips");
+
+  /* 6a. Pキー拾得 + 実ゲームの拾得半径（以前の28pxでは拾えなかった距離） */
+  game.start();
+  game.droppedWeapons.length = 0;
+  const nearbyWeapon = new PickupWeapon(game, "bat", game.player.x + 60, 0);
+  nearbyWeapon.z = 0; nearbyWeapon.vz = 0; nearbyWeapon.vx = 0;
+  game.droppedWeapons.push(nearbyWeapon);
+  input.pickupPressed = true;
+  game.update(1 / 60);
+  ok(game.player.currentWeapon === "bat", "pickup radius allows nearby dropped weapon");
+  ok(src.includes('if (e.code === "KeyP") input.pickupPressed = true;'), "P key is mapped to weapon pickup");
+  ok(src.includes('if (e.code === "Escape") game.togglePause();'), "Escape key is mapped to pause");
+
+  /* 6a-2. 後半ステージでも遭遇ごとに最低1個は武器が落ちる */
+  game.start();
+  game.stageIndex = 1;
+  game.startArea(0);
+  game.droppedWeapons.length = 0;
+  for (const e of game.enemies) if (e.alive) e.hurt(9999, 0);
+  step(sandbox, game, 1 / 60, 120);
+  ok(game.droppedWeapons.length > 0, "stage 2 encounter guarantees at least one weapon drop");
+
+  /* 6a-3. 防御: 正面からの被ダメージを80%軽減する */
+  game.start();
+  game.player.facing = 1;
+  input.guardHeld = true;
+  game.player.update(1 / 60);
+  const hpBeforeGuard = game.player.hp;
+  game.player.hurt(20, game.player.x + 50);
+  ok(game.player.state === "guard", "holding guard enters guard state");
+  ok(game.player.hp === hpBeforeGuard - 4, "guard reduces frontal 20 damage to 4 chip damage");
 
   /* 6b. 新敵クラスを生成・撃破できる */
   game.enemies.length = 0;
