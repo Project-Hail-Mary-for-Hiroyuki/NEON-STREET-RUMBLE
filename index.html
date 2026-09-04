@@ -2,7 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>NEON STREET RUMBLE - ネオン街ストリートファイト</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -85,6 +88,45 @@
   }
   #copy-code-btn:hover { background: rgba(60, 60, 140, 0.95); }
   #copy-code-btn:active { background: rgba(90, 100, 200, 0.95); }
+
+  /* スマホ全画面ボタン: Fullscreen APIでブラウザUIを隠す */
+  #fullscreen-btn {
+    position: absolute;
+    top: 8px;
+    left: 14px;
+    z-index: 31;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px; height: 34px;
+    padding: 0 9px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #8dffd8;
+    background: rgba(12, 44, 40, 0.9);
+    border: 1px solid rgba(120, 255, 210, 0.65);
+    box-shadow: 0 0 10px rgba(80, 255, 210, 0.3);
+    cursor: pointer;
+    touch-action: manipulation;
+    pointer-events: auto;
+  }
+  #fullscreen-btn.show { display: flex; }
+  #fullscreen-btn.active { color: #ffe76b; border-color: rgba(255,231,107,0.75); }
+  #fullscreen-btn:active { filter: brightness(1.5); transform: scale(0.96); }
+
+  /* 全画面中は横持ちでも筐体の余白をなくして表示領域いっぱいにする。 */
+  html:fullscreen #cabinet, html:-webkit-full-screen #cabinet {
+    width: 100vw; height: 100vh; height: 100dvh;
+    aspect-ratio: auto; padding: 0; border-radius: 0; border: 0; box-shadow: none;
+  }
+  html:fullscreen #cabinet::before, html:-webkit-full-screen #cabinet::before { content: none; }
+  html:fullscreen #screen, html:-webkit-full-screen #screen {
+    width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0;
+  }
+
   /* 一時停止ボタン(モバイル用) */
   #pause-btn {
     position: absolute;
@@ -623,6 +665,10 @@
     }
     canvas#game { object-fit: contain; }
     #copy-code-btn { top: calc(8px + env(safe-area-inset-top, 0px)); }
+    #fullscreen-btn {
+      top: calc(8px + env(safe-area-inset-top, 0px));
+      left: max(10px, env(safe-area-inset-left, 0px));
+    }
     /* 縦持ちでは下部を操作帯にし、中央のゲーム画面を指で隠しにくくする */
     #stick { left: max(14px, env(safe-area-inset-left, 0px)); bottom: max(22px, env(safe-area-inset-bottom, 0px)); width: 166px; height: 166px; }
     #stick-zone { inset: -22px; }
@@ -809,6 +855,7 @@
   <div id="ambient"></div>
   <div id="cabinet">
     <button id="copy-code-btn" title="ソースコードをコピー">CODE COPY</button>
+    <button id="fullscreen-btn" title="全画面表示" aria-label="全画面表示">FULL</button>
     <button id="pause-btn" title="一時停止" aria-label="一時停止">II</button>
     <div id="screen">
       <canvas id="game" width="960" height="540"></canvas>
@@ -1355,6 +1402,7 @@ $("stageclear-screen").addEventListener("pointerdown", e => { if (game && game.s
 /* ポーズ画面: ボタンで再開/リスタート/タイトルへ */
 const pauseScreenEl = $("pause-screen");
 const pauseBtnEl = $("pause-btn");
+const fullscreenBtnEl = $("fullscreen-btn");
 pauseScreenEl.addEventListener("pointerdown", e => {
   if (!(game.state === "playing" && game.paused)) return;
   const b = e.target.closest ? e.target.closest("button[data-pause]") : null;
@@ -1370,6 +1418,55 @@ pauseBtnEl.addEventListener("pointerdown", e => {
   e.stopPropagation();
   game.togglePause();
 }, { passive: false });
+
+/* スマホ全画面: 標準 Fullscreen API + Safari系webkit API。
+   iPhone等でAPI非対応の場合はホーム画面追加(standalone)を案内する。 */
+function currentFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+function syncFullscreenButton() {
+  const active = !!currentFullscreenElement() || !!navigator.standalone;
+  fullscreenBtnEl.classList.toggle("active", active);
+  fullscreenBtnEl.textContent = active ? "EXIT" : "FULL";
+  fullscreenBtnEl.setAttribute && fullscreenBtnEl.setAttribute("aria-label", active ? "全画面を終了" : "全画面表示");
+}
+async function toggleFullscreen() {
+  const active = currentFullscreenElement();
+  try {
+    if (active) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) await exit.call(document);
+    } else {
+      const target = document.documentElement;
+      const request = target.requestFullscreen || target.webkitRequestFullscreen;
+      if (request) {
+        const result = request.call(target);
+        if (result && typeof result.then === "function") await result;
+      } else if (!navigator.standalone) {
+        fullscreenBtnEl.textContent = "HOME";
+        fullscreenBtnEl.title = "このブラウザでは全画面API非対応です。ホーム画面に追加すると全画面で起動できます";
+        if (game && game.showStageMessage) game.showStageMessage("FULLSCREEN · ホーム画面に追加で全画面起動", 3.0);
+        setTimeout(syncFullscreenButton, 1600);
+        return false;
+      }
+    }
+  } catch (err) {
+    fullscreenBtnEl.textContent = "RETRY";
+    setTimeout(syncFullscreenButton, 1200);
+    return false;
+  }
+  syncFullscreenButton();
+  return true;
+}
+if (isTouch) fullscreenBtnEl.classList.add("show");
+fullscreenBtnEl.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  e.stopPropagation();
+  toggleFullscreen();
+}, { passive: false });
+document.addEventListener("fullscreenchange", syncFullscreenButton);
+document.addEventListener("webkitfullscreenchange", syncFullscreenButton);
+syncFullscreenButton();
 
 /* ============================== SFX ===================================== */
 let audioCtx = null, muted = false, noiseBuf = null;

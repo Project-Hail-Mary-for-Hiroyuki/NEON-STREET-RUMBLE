@@ -84,7 +84,7 @@ function makeEl(tag) {
 /* 武器スロット + 主要IDのマップ */
 const WEAPON_IDS = ["player-hpbar","enemy-hpbar","enemy-name","timer","score","combo-hud",
   "combo-hits","final-score","final-combo","final-time","final-kills","title-best",
-  "best-score","new-record","pause-screen","pause-btn","stage-label","stage-message",
+  "best-score","new-record","pause-screen","pause-btn","fullscreen-btn","stage-label","stage-message",
   "enemies-left","weapon-dur","stageclear-screen","clear-score","title-screen","gameover-screen",
   "weapon-slots","weapon-label","copy-code-btn","code-close","code-text","code-copy","code-download",
   "code-status","touch-ui","stick","stick-zone","stick-base","stick-knob","ambient","cabinet",
@@ -199,6 +199,7 @@ function ok(cond, msg) {
 
 function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
+  const html = fs.readFileSync("index.html", "utf8");
   const sandbox = buildSandbox();
   vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, getWeaponAttackSummary };", sandbox);
   const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
@@ -216,6 +217,9 @@ function run() {
   ok(src.includes('e.code === "KeyP") input.pickupPressed = true'), "P key is pickup");
   ok(src.includes('e.code === "Escape") game.togglePause()'), "Escape key is pause");
   ok(!src.includes('e.code === "KeyE") input.pickupPressed = true'), "E key no longer picks up weapons");
+  ok(html.includes('id="fullscreen-btn"'), "mobile fullscreen button exists");
+  ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
+  ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
 
   /* 1. 起動: title状態 */
   ok(game.state === "title", "boot -> state is 'title'");
