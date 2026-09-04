@@ -220,6 +220,11 @@ function run() {
   ok(html.includes('id="fullscreen-btn"'), "mobile fullscreen button exists");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
+  for (const kind of ["ninja", "robot", "kungfu", "drone"]) {
+    const builder = "buildChibi" + ({ ninja: "Ninja", robot: "Robot", kungfu: "KungFu", drone: "Drone" }[kind]);
+    ok(src.includes("function " + builder + "("), kind + " has dedicated chibi builder");
+    ok(src.includes('o.kind === "' + kind + '") ' + builder + '(cells, pose, pal)'), kind + " routes through dedicated chibi builder");
+  }
 
   /* 1. 起動: title状態 */
   ok(game.state === "title", "boot -> state is 'title'");

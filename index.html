@@ -2310,6 +2310,18 @@ function chibiPalette(kind, color, jointColor) {
     const hair = color || "#b85cff";
     return { hair, jacket: hair, pants: "#3a2343", face: chibiFace, accent, shoes: accent };
   }
+  if (kind === "ninja") {
+    return { hair: "#090b10", jacket: color || "#16181f", pants: "#0e1118", face: "#20242d", accent: jointColor || "#ff4a3a", shoes: "#090b10" };
+  }
+  if (kind === "robot") {
+    return { armor: color || "#3d4452", accent: jointColor || "#ff3030", face: "#141820", shoes: "#252a33" };
+  }
+  if (kind === "kungfu") {
+    return { hair: "#2a1820", jacket: color || "#ffb840", pants: "#782c4e", face: chibiFace, accent: jointColor || "#ff4ec7", shoes: "#2b1721" };
+  }
+  if (kind === "drone") {
+    return { armor: color || "#3a4a5a", accent: jointColor || "#7ee0ff", face: "#101820", shoes: jointColor || "#7ee0ff" };
+  }
   const main = color || "#3ecbff";
   return { hair: main, jacket: main, pants: "#15222c", face: chibiFace, accent, shoes: accent };
 }
@@ -2343,7 +2355,7 @@ function chibiPose(pose) {
   /* 16×16 pixel block character drawing.
    Same interface as old drawStick — keeps pose/kind/color/scale/facing/opacity. */
 function drawStick(o) {
-  if (o.kind === "hero" || o.kind === "fighter" || o.kind === "midboss") {
+  if (["hero", "fighter", "ninja", "robot", "kungfu", "drone", "midboss"].includes(o.kind)) {
     drawChibi(o);
     return;
   }
@@ -2511,6 +2523,62 @@ function buildChibiFighter(cells, pose, pal) {
   cells.set(hx + "," + (-6), chibiInk);             /* mouth */
   chibiSmallBody(cells, p, pal);
 }
+function buildChibiNinja(cells, pose, pal) {
+  const p = chibiPose(pose), hx = Math.round(p.lean);
+  chibiHead(cells, hx, -14, 9, 8, i => i < 2 ? pal.hair : pal.jacket);
+  chibiRect(cells, hx - 4, -11, 9, 2, pal.face);      /* narrow mask slit */
+  chibiRect(cells, hx - 3, -11, 2, 1, pal.accent);   /* red eyes */
+  chibiRect(cells, hx + 2, -11, 2, 1, pal.accent);
+  chibiRect(cells, hx - 5, -13, 2, 3, pal.jacket);   /* hood tails */
+  chibiSmallBody(cells, p, pal);
+  chibiRect(cells, hx - 2, -5, 5, 1, pal.accent);    /* sash */
+}
+function buildChibiRobot(cells, pose, pal) {
+  const p = chibiPose(pose);
+  chibiHead(cells, 0, -14, 10, 8, pal.armor);
+  chibiRect(cells, -4, -12, 8, 2, pal.face);
+  chibiRect(cells, -2, -11, 4, 1, pal.accent);       /* visor */
+  chibiRect(cells, -5, -6, 10, 4, pal.armor);
+  chibiRect(cells, -2, -5, 4, 2, pal.accent);        /* chest core */
+  chibiRect(cells, -7, -6, 2, 3, pal.accent);
+  if (p.punch) {
+    const ext = Math.round(3 + p.armFwd * 2);
+    chibiRect(cells, 5, -5, ext, 2, pal.armor);
+    chibiRect(cells, 5 + ext - 1, -5, 2, 2, pal.accent);
+  } else chibiRect(cells, 5, -6, 2, 4, pal.armor);
+  chibiRect(cells, -7, -5, 2, 4, pal.armor);
+  const lf = Math.round(p.legF * 2), lb = Math.round(p.legB * 2);
+  chibiRect(cells, -4 + lb, -3, 4, 3, pal.armor);
+  chibiRect(cells, 0 + lf, -3, 4, 3, pal.armor);
+  chibiRect(cells, -4 + lb, -1, 4, 1, pal.shoes);
+  chibiRect(cells, 0 + lf, -1, 4, 1, pal.shoes);
+}
+function buildChibiKungFu(cells, pose, pal) {
+  const p = chibiPose(pose), hx = Math.round(p.lean);
+  chibiHead(cells, hx, -14, 9, 8, i => i < 2 ? pal.hair : pal.face);
+  chibiRect(cells, hx - 3, -11, 2, 2, chibiInk);
+  chibiRect(cells, hx + 2, -11, 2, 2, chibiInk);
+  chibiRect(cells, hx - 4, -13, 9, 1, pal.accent);   /* headband */
+  cells.set((hx + 5) + ",-13", pal.accent);
+  cells.set((hx + 6) + ",-12", pal.accent);
+  chibiSmallBody(cells, p, pal);
+  chibiRect(cells, hx - 3, -4, 7, 1, pal.accent);    /* kung-fu sash */
+}
+function buildChibiDrone(cells, pose, pal) {
+  const p = chibiPose(pose);
+  chibiHead(cells, 0, -11, 10, 6, pal.armor);
+  chibiRect(cells, -3, -9, 6, 2, pal.face);
+  chibiRect(cells, -1, -9, 2, 1, pal.accent);        /* lens */
+  chibiRect(cells, -7, -9, 3, 2, pal.armor);         /* side rotors */
+  chibiRect(cells, 5, -9, 3, 2, pal.armor);
+  chibiRect(cells, -8, -10, 3, 1, pal.accent);
+  chibiRect(cells, 6, -10, 3, 1, pal.accent);
+  chibiRect(cells, -3, -5, 6, 2, pal.armor);
+  chibiRect(cells, -1, -4, 2, 2, pal.accent);        /* emitter */
+  const tilt = Math.round(p.lean);
+  cells.set((-4 + tilt) + ",-4", pal.shoes);
+  cells.set((4 + tilt) + ",-4", pal.shoes);
+}
 function buildChibiMidBoss(cells, pose, pal) {
   const p = chibiPose(pose);
   chibiHead(cells, 0, -15, 12, 9, pal.armor);       /* round helmet */
@@ -2549,6 +2617,10 @@ function drawChibi(o) {
   const pose = o.pose || {};
   const pal = chibiPalette(o.kind, o.color, o.jointColor);
   if (o.kind === "fighter") buildChibiFighter(cells, pose, pal);
+  else if (o.kind === "ninja") buildChibiNinja(cells, pose, pal);
+  else if (o.kind === "robot") buildChibiRobot(cells, pose, pal);
+  else if (o.kind === "kungfu") buildChibiKungFu(cells, pose, pal);
+  else if (o.kind === "drone") buildChibiDrone(cells, pose, pal);
   else if (o.kind === "midboss") buildChibiMidBoss(cells, pose, pal);
   else buildChibiHero(cells, pose, pal);
 
