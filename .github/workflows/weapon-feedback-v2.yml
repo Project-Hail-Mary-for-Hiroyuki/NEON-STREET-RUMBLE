@@ -1,0 +1,51 @@
+name: Weapon Feedback V2
+
+on:
+  push:
+    branches:
+      - feature/weapon-feedback-v2
+    paths:
+      - tools/apply_weapon_feedback_v2.py
+      - .github/workflows/weapon-feedback-v2.yml
+      - IMPLEMENT_WEAPON_FEEDBACK_V2.md
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  implement-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/weapon-feedback-v2
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply implementation
+        run: python3 tools/apply_weapon_feedback_v2.py
+
+      - name: Run regression tests
+        run: bash tests/run.sh
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Commit tested implementation
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No implementation changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html tests/harness.js
+          git commit -m "feat: strengthen weapon pickup and hit feedback"
+          git push origin HEAD:feature/weapon-feedback-v2
