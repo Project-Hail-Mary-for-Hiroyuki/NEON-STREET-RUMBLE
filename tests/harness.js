@@ -201,8 +201,8 @@ function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const html = fs.readFileSync("index.html", "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, applyStageDifficulty, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
-  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, DIFFICULTY_MODES, setDifficultyMode, applyStageDifficulty, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, DIFFICULTY_MODES, setDifficultyMode, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -232,6 +232,10 @@ function run() {
   ok(src.includes("updateBgm(this.stageIndex, dt, this.bossActive)"), "game update drives BGM sequencer");
   ok(src.includes('case "guard"') && src.includes('case "stage"') && src.includes('case "warning"'),
     "guard/stage/warning SFX are available");
+  ok(html.includes('id="settings-screen"') && html.includes('id="sound-volume"') && html.includes('id="difficulty-select"'),
+    "settings screen has sound and difficulty controls");
+  ok(DIFFICULTY_MODES.easy.dmg < 1 && DIFFICULTY_MODES.hard.dmg > 1,
+    "settings difficulty has easy/normal/hard combat profiles");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
   for (const kind of ["ninja", "robot", "kungfu", "drone"]) {
@@ -392,6 +396,14 @@ function run() {
   ok(diffS1.score < diffS2.score && diffS2.score < diffS3.score,
     "higher stages award more enemy score");
   game.stageIndex = 0;
+
+  setDifficultyMode("easy", false);
+  const easyEnemy = game.makeStageEnemy({ type: "fighter", x: 700 });
+  setDifficultyMode("hard", false);
+  const hardEnemy = game.makeStageEnemy({ type: "fighter", x: 700 });
+  ok(easyEnemy.maxHp < hardEnemy.maxHp && easyEnemy.dmg < hardEnemy.dmg,
+    "difficulty setting changes newly spawned enemy strength");
+  setDifficultyMode("normal", false);
 
   /* 6a-3. 防御: 正面からの被ダメージを80%軽減する */
   game.start();

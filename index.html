@@ -866,6 +866,54 @@
   }
   .pause-buttons button:active { filter: brightness(1.5); }
 
+  .settings-panel {
+    width: min(420px, 86vw);
+    padding: 24px 26px;
+    border: 1px solid rgba(120, 210, 255, 0.55);
+    border-radius: 14px;
+    background: rgba(10, 12, 35, 0.92);
+    box-shadow: 0 0 26px rgba(40, 180, 255, 0.22);
+  }
+  .settings-row {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    align-items: center;
+    gap: 14px;
+    margin: 18px 0;
+    text-align: left;
+    font-size: clamp(9px, 1.3vw, 13px);
+    color: #cfe3ff;
+  }
+  .settings-row label { color: #ffe18a; }
+  .settings-row input, .settings-row select {
+    width: 100%;
+    font-family: inherit;
+    color: #e9f8ff;
+    background: #151936;
+    border: 1px solid rgba(120, 190, 255, 0.55);
+    border-radius: 6px;
+    padding: 7px;
+  }
+  .settings-note {
+    margin-top: 12px;
+    font-size: clamp(7px, 1vw, 10px);
+    color: #93a9cc;
+    line-height: 1.7;
+  }
+  .settings-launch, #settings-close {
+    margin-top: 14px;
+    font-family: inherit;
+    font-size: clamp(9px, 1.2vw, 12px);
+    letter-spacing: 2px;
+    color: #bfefff;
+    background: rgba(20, 38, 70, 0.82);
+    border: 1px solid rgba(100, 210, 255, 0.55);
+    border-radius: 8px;
+    padding: 9px 20px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
   #mute-note {
     position: absolute;
     bottom: 4px; right: 10px;
@@ -979,6 +1027,7 @@
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
         </div>
+        <button class="settings-launch" id="title-settings-btn">SETTINGS</button>
       </div>
 
       <!-- Game Over -->
@@ -1000,10 +1049,31 @@
         <div class="pause-title">PAUSED</div>
         <div class="pause-buttons">
           <button data-pause="resume">RESUME</button>
+          <button data-pause="settings">SETTINGS</button>
           <button data-pause="restart">RESTART</button>
           <button data-pause="quit">QUIT TO TITLE</button>
         </div>
         <div class="blink">ESC / ENTER: RESUME</div>
+      </div>
+
+      <div class="overlay" id="settings-screen">
+        <div class="settings-panel">
+          <div class="pause-title" style="font-size:clamp(20px,3.5vw,38px)">SETTINGS</div>
+          <div class="settings-row">
+            <label for="sound-volume">SOUND <span id="sound-value">80%</span></label>
+            <input id="sound-volume" type="range" min="0" max="100" step="5" value="80">
+          </div>
+          <div class="settings-row">
+            <label for="difficulty-select">DIFFICULTY</label>
+            <select id="difficulty-select">
+              <option value="easy">EASY</option>
+              <option value="normal" selected>NORMAL</option>
+              <option value="hard">HARD</option>
+            </select>
+          </div>
+          <div class="settings-note">難易度変更は次に出現する敵から反映されます。設定はこのブラウザに保存されます。</div>
+          <button id="settings-close">BACK</button>
+        </div>
       </div>
 
       <div class="overlay" id="stageclear-screen">
@@ -1054,6 +1124,36 @@ function loadBest() {
 function saveBest(v) {
   try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) {}
 }
+
+const SETTINGS_KEY = "neon_street_rumble_settings_v1";
+const DIFFICULTY_MODES = {
+  easy:   { hp: 0.86, dmg: 0.78, speed: 0.95, windup: 1.08, recover: 1.06, score: 0.90 },
+  normal: { hp: 1.00, dmg: 1.00, speed: 1.00, windup: 1.00, recover: 1.00, score: 1.00 },
+  hard:   { hp: 1.16, dmg: 1.20, speed: 1.06, windup: 0.94, recover: 0.94, score: 1.18 }
+};
+let audioLevel = 0.80;
+let difficultyMode = "normal";
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ audioLevel, difficultyMode })); } catch (e) {}
+}
+function setAudioLevel(value, persist = true) {
+  audioLevel = clamp(Number(value) || 0, 0, 1);
+  if (persist) saveSettings();
+  return audioLevel;
+}
+function setDifficultyMode(mode, persist = true) {
+  difficultyMode = DIFFICULTY_MODES[mode] ? mode : "normal";
+  if (persist) saveSettings();
+  return difficultyMode;
+}
+function loadSettings() {
+  try {
+    const data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    if (Number.isFinite(Number(data.audioLevel))) setAudioLevel(Number(data.audioLevel), false);
+    if (DIFFICULTY_MODES[data.difficultyMode]) setDifficultyMode(data.difficultyMode, false);
+  } catch (e) {}
+}
+loadSettings();
 
 /* 2D固定: 全キャラクターが同一の地面線に立ち、同一スケールで描画される */
 const GROUND_Y = H * 0.74;   /* キャラの足元が立つ地面線(画面Y) */
@@ -1225,12 +1325,23 @@ const STAGE_DIFFICULTY = [
 ];
 function applyStageDifficulty(enemy, stageIndex) {
   const d = STAGE_DIFFICULTY[stageIndex] || STAGE_DIFFICULTY[STAGE_DIFFICULTY.length - 1];
-  enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * d.hp));
-  enemy.dmg = Math.max(1, Math.round(enemy.dmg * d.dmg));
-  enemy.speed = Math.max(1, Math.round(enemy.speed * d.speed));
-  enemy.windupTime = Math.max(0.12, enemy.windupTime * d.windup);
-  enemy.recoverTime = Math.max(0.2, enemy.recoverTime * d.recover);
-  enemy.score = Math.max(1, Math.round(enemy.score * d.score));
+  const m = DIFFICULTY_MODES[difficultyMode] || DIFFICULTY_MODES.normal;
+  enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * d.hp * m.hp));
+  enemy.dmg = Math.max(1, Math.round(enemy.dmg * d.dmg * m.dmg));
+  enemy.speed = Math.max(1, Math.round(enemy.speed * d.speed * m.speed));
+  enemy.windupTime = Math.max(0.12, enemy.windupTime * d.windup * m.windup);
+  enemy.recoverTime = Math.max(0.2, enemy.recoverTime * d.recover * m.recover);
+  enemy.score = Math.max(1, Math.round(enemy.score * d.score * m.score));
+  return enemy;
+}
+function applyUserDifficulty(enemy) {
+  const m = DIFFICULTY_MODES[difficultyMode] || DIFFICULTY_MODES.normal;
+  enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * m.hp));
+  enemy.dmg = Math.max(1, Math.round(enemy.dmg * m.dmg));
+  enemy.speed = Math.max(1, Math.round(enemy.speed * m.speed));
+  enemy.windupTime = Math.max(0.12, enemy.windupTime * m.windup);
+  enemy.recoverTime = Math.max(0.2, enemy.recoverTime * m.recover);
+  enemy.score = Math.max(1, Math.round(enemy.score * m.score));
   return enemy;
 }
 
@@ -1459,9 +1570,51 @@ pauseScreenEl.addEventListener("pointerdown", e => {
   if (!b) return;
   const act = b.dataset.pause;
   if (act === "resume") game.togglePause();
+  else if (act === "settings") openSettings("pause");
   else if (act === "restart") game.start();
   else if (act === "quit") game.toTitle();
 });
+
+const settingsScreenEl = $("settings-screen");
+const soundVolumeEl = $("sound-volume");
+const soundValueEl = $("sound-value");
+const difficultySelectEl = $("difficulty-select");
+let settingsReturnTo = "title";
+function syncSettingsUi() {
+  soundVolumeEl.value = String(Math.round(audioLevel * 100));
+  soundValueEl.textContent = Math.round(audioLevel * 100) + "%";
+  difficultySelectEl.value = difficultyMode;
+}
+function openSettings(returnTo) {
+  settingsReturnTo = returnTo === "pause" ? "pause" : "title";
+  syncSettingsUi();
+  elTitle.classList.remove("show");
+  pauseScreenEl.classList.remove("show");
+  settingsScreenEl.classList.add("show");
+}
+function closeSettings() {
+  settingsScreenEl.classList.remove("show");
+  if (settingsReturnTo === "pause" && game.state === "playing" && game.paused) pauseScreenEl.classList.add("show");
+  else if (game.state === "title") elTitle.classList.add("show");
+}
+$("title-settings-btn").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  e.stopPropagation();
+  openSettings("title");
+});
+$("settings-close").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  closeSettings();
+});
+soundVolumeEl.addEventListener("input", () => {
+  setAudioLevel(Number(soundVolumeEl.value) / 100);
+  soundValueEl.textContent = Math.round(audioLevel * 100) + "%";
+});
+difficultySelectEl.addEventListener("change", () => {
+  setDifficultyMode(difficultySelectEl.value);
+  sfx("ui", 0.12);
+});
+syncSettingsUi();
 /* モバイルの一時停止ボタン */
 pauseBtnEl.addEventListener("pointerdown", e => {
   e.preventDefault();
@@ -1533,7 +1686,7 @@ function sfx(type, vol = 0.25) {
   if (muted || !audioCtx) return;
   const t = audioCtx.currentTime;
   const out = audioCtx.createGain();
-  out.gain.value = vol;
+  out.gain.value = vol * audioLevel;
   out.connect(audioCtx.destination);
   const osc = audioCtx.createOscillator();
   const g = audioCtx.createGain();
@@ -1730,7 +1883,7 @@ function bgmTone(freq, dur, vol, type = "square") {
   const gain = audioCtx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t);
-  gain.gain.setValueAtTime(vol, t);
+  gain.gain.setValueAtTime(vol * audioLevel, t);
   gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
   osc.connect(gain); gain.connect(audioCtx.destination);
   osc.start(t); osc.stop(t + dur + 0.01);
@@ -3840,6 +3993,7 @@ class Game {
 
   makeBoss(cfg) {
     const boss = new MidBoss(this, cfg);
+    applyUserDifficulty(boss);
     boss.reset(790, 0.50);
     return boss;
   }
@@ -3914,6 +4068,7 @@ class Game {
     el.title.classList.remove("show");
     el.gameover.classList.remove("show");
     el.pauseScreen.classList.remove("show");
+    settingsScreenEl.classList.remove("show");
     el.stageClear.classList.remove("show");
     this.syncPauseBtn();
     sfx("stage", 0.18);
@@ -3927,6 +4082,7 @@ class Game {
     el.title.classList.add("show");
     el.gameover.classList.remove("show");
     el.pauseScreen.classList.remove("show");
+    settingsScreenEl.classList.remove("show");
     el.stageClear.classList.remove("show");
     el.stageMessage.classList.remove("show");
     this.syncPauseBtn();
