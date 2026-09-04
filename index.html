@@ -1667,6 +1667,38 @@ function sfx(type, vol = 0.25) {
       osc.start(t); osc.stop(t + 0.12);
       break;
     }
+    case "guard": {
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(920, t);
+      osc.frequency.exponentialRampToValueAtTime(420, t + 0.08);
+      g.gain.setValueAtTime(0.24, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.10);
+      osc.connect(g); g.connect(out);
+      osc.start(t); osc.stop(t + 0.11);
+      break;
+    }
+    case "stage": {
+      osc.type = "square";
+      osc.frequency.setValueAtTime(330, t);
+      osc.frequency.setValueAtTime(440, t + 0.07);
+      osc.frequency.setValueAtTime(660, t + 0.14);
+      g.gain.setValueAtTime(0.16, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.24);
+      osc.connect(g); g.connect(out);
+      osc.start(t); osc.stop(t + 0.25);
+      break;
+    }
+    case "warning": {
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(150, t);
+      osc.frequency.setValueAtTime(110, t + 0.10);
+      osc.frequency.setValueAtTime(150, t + 0.20);
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.01, t + 0.32);
+      osc.connect(g); g.connect(out);
+      osc.start(t); osc.stop(t + 0.33);
+      break;
+    }
     case "ui": {
       osc.type = "square";
       osc.frequency.setValueAtTime(520, t);
@@ -1676,6 +1708,46 @@ function sfx(type, vol = 0.25) {
       break;
     }
   }
+}
+
+/* ============================== BGM ===================================== */
+/* 外部音源を使わない軽量ステップシーケンサ。Game.updateに同期するためポーズ中は鳴らない。 */
+const BGM_PATTERNS = [
+  { bpm: 112, lead: [220, 0, 277, 0, 330, 277, 247, 0], bass: [110, 0, 110, 0, 98, 0, 123, 0] },
+  { bpm: 124, lead: [247, 311, 0, 370, 311, 247, 415, 0], bass: [82, 0, 104, 0, 92, 0, 123, 0] },
+  { bpm: 136, lead: [277, 370, 415, 0, 330, 440, 494, 0], bass: [92, 0, 110, 0, 123, 0, 138, 0] }
+];
+let bgmTimer = 0, bgmStep = 0, bgmStage = -1;
+function resetBgm(stageIndex = 0) {
+  bgmTimer = 0;
+  bgmStep = 0;
+  bgmStage = stageIndex;
+}
+function bgmTone(freq, dur, vol, type = "square") {
+  if (muted || !audioCtx || !freq) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + dur + 0.01);
+}
+function updateBgm(stageIndex, dt, bossActive = false) {
+  if (muted || !audioCtx) return;
+  if (bgmStage !== stageIndex) resetBgm(stageIndex);
+  const p = BGM_PATTERNS[stageIndex] || BGM_PATTERNS[BGM_PATTERNS.length - 1];
+  bgmTimer -= dt;
+  if (bgmTimer > 0) return;
+  const stepDur = 60 / (p.bpm * (bossActive ? 1.08 : 1)) / 2;
+  bgmTimer += stepDur;
+  const i = bgmStep % p.lead.length;
+  bgmTone(p.lead[i], stepDur * 0.72, bossActive ? 0.045 : 0.032, "square");
+  if (p.bass[i]) bgmTone(p.bass[i], stepDur * 0.82, bossActive ? 0.040 : 0.028, "triangle");
+  if (bgmStep % 4 === 0) bgmTone(55, stepDur * 0.45, bossActive ? 0.055 : 0.038, "sine");
+  bgmStep++;
 }
 
 /* =========================== Background ================================= */
@@ -3078,7 +3150,7 @@ class Player {
       this.game.effects.spark(this.x + this.facing * 24, g.groundY - 62 * g.scale, this.y, "#9fe6ff", 8, 180);
       this.game.effects.text(this.x, g.groundY - 92 * g.scale, this.y, "BLOCK -" + chip, "#9fe6ff");
       this.game.shake = Math.max(this.game.shake, 3);
-      sfx("hit", 0.16);
+      sfx("guard", 0.18);
       if (this.hp <= 0) {
         this.state = "dead";
         this.alive = false;
@@ -3786,6 +3858,8 @@ class Game {
         buildBackground(stageTheme(this.stageIndex));
         this.startArea(0);
         this.showStageMessage(STAGES[this.stageIndex].name + " START", 2.2);
+        resetBgm(this.stageIndex);
+        sfx("stage", 0.18);
         return;
       }
       this.state = "clear";
@@ -3811,6 +3885,7 @@ class Game {
     this.enemies.push(boss);
     el.stage.textContent = stage.name + " · MID BOSS";
     this.showStageMessage("WARNING · " + stage.boss.displayName, 2.5);
+    sfx("warning", 0.22);
   }
 
   start() {
@@ -3833,6 +3908,7 @@ class Game {
     this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
     this.areaScroll = 0; this.cameraX = 0; this.autoScroll = false; this.bossActive = false;
     buildBackground(STAGES[0].theme);
+    resetBgm(0);
     this.startArea(0);
     input.reset();
     el.title.classList.remove("show");
@@ -3840,7 +3916,7 @@ class Game {
     el.pauseScreen.classList.remove("show");
     el.stageClear.classList.remove("show");
     this.syncPauseBtn();
-    sfx("ui");
+    sfx("stage", 0.18);
   }
 
   toTitle() {
@@ -3869,7 +3945,10 @@ class Game {
     el.pauseBtn.classList.toggle("show", this.state === "playing" && !this.paused);
   }
 
-  toggleMute() { muted = !muted; }
+  toggleMute() {
+    muted = !muted;
+    if (!muted) resetBgm(this.stageIndex);
+  }
 
   /* プレイヤーが被弾/防御した側でも「攻撃の交錯」を1回として数える。 */
   noteExchangeFrom(fromX) {
@@ -3935,6 +4014,7 @@ class Game {
 
   update(dt) {
     this.time += dt;
+    updateBgm(this.stageIndex, dt, this.bossActive);
     this.player.update(dt);
     for (const e of this.enemies) e.update(dt);
     for (const p of this.projectiles) p.update(dt);

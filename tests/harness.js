@@ -201,8 +201,8 @@ function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const html = fs.readFileSync("index.html", "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, applyStageDifficulty, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
-  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, applyStageDifficulty, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, BGM_PATTERNS, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -226,6 +226,12 @@ function run() {
   ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
   ok(src.includes('e.code === "KeyC") input.craftPressed = true'), "C key is weapon craft");
   ok(html.includes('data-action="craft"'), "mobile craft button exists");
+  ok(BGM_PATTERNS.length === 3, "stage-specific BGM has three patterns");
+  ok(BGM_PATTERNS[0].bpm < BGM_PATTERNS[1].bpm && BGM_PATTERNS[1].bpm < BGM_PATTERNS[2].bpm,
+    "BGM tempo rises by stage");
+  ok(src.includes("updateBgm(this.stageIndex, dt, this.bossActive)"), "game update drives BGM sequencer");
+  ok(src.includes('case "guard"') && src.includes('case "stage"') && src.includes('case "warning"'),
+    "guard/stage/warning SFX are available");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
   for (const kind of ["ninja", "robot", "kungfu", "drone"]) {
