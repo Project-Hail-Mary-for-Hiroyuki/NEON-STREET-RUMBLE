@@ -2722,6 +2722,45 @@ function drawEquippedWeapon(player, g) {
   ctx.restore();
 }
 
+/* 敵の武器はまず「見た目」だけに限定する。
+   当たり判定・攻撃力・AIは既存のままなので、戦闘バランスを変えずに武装感だけ追加できる。 */
+const ENEMY_HELD_WEAPONS = {
+  fighter: "bat",
+  ninja: "sword",
+  robot: "hammer",
+  kungfu: "nunchaku",
+  midboss: "staff"
+};
+function drawEnemyHeldWeapon(enemy, g, opacity = 1) {
+  const type = enemy.heldWeaponType;
+  const spec = WEAPON_SPECS[type];
+  if (!type || !spec || !spec.renderFunc) return;
+
+  const actorScale = g.scale * enemy.scaleBias * CHARACTER_RENDER_SCALE;
+  const active = enemy.state === "attack";
+  const winding = enemy.state === "windup";
+  const attackP = active ? clamp(enemy.stateTime / Math.max(0.001, enemy.attackTime), 0, 1) : 0;
+  const windP = winding ? clamp(enemy.windupProgress || 0, 0, 1) : 0;
+  const swing = active
+    ? lerp(-0.85, 0.72, attackP)
+    : winding ? lerp(-0.18, -0.72, windP) : -0.18;
+  const handX = enemy.x + enemy.facing * 18 * actorScale;
+  const handY = g.groundY - enemy.z - 27 * actorScale;
+  const weaponScale = actorScale * (active ? 0.36 : 0.32);
+  const gripY = { bat: 30, sword: 50, hammer: 34, nunchaku: -2, staff: 24 }[type] || 25;
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.translate(handX, handY);
+  ctx.scale(enemy.facing * weaponScale, weaponScale);
+  ctx.rotate(swing);
+  ctx.translate(0, -gripY);
+  ctx.shadowColor = spec.color;
+  ctx.shadowBlur = active ? 10 : 5;
+  spec.renderFunc(ctx);
+  ctx.restore();
+}
+
 class Player {
   constructor(game) {
     this.game = game;
@@ -3078,6 +3117,9 @@ class Enemy {
     this.knock = cfg.knock;
     this.attackSfx = cfg.attackSfx;
     this.throwChance = cfg.throwChance || 0;
+    this.heldWeaponType = cfg.heldWeaponType === undefined
+      ? (ENEMY_HELD_WEAPONS[this.type] || null)
+      : cfg.heldWeaponType;
 
     const side = Math.random() < 0.5 ? -1 : 1;
     this.x = side > 0 ? rand(W - 40, W + 80) : rand(-80, 40);
@@ -3233,6 +3275,7 @@ class Enemy {
       windup: this.windup > 0 ? this.windupProgress : 0,
       opacity: alpha
     });
+    drawEnemyHeldWeapon(this, g, alpha);
   }
 
   pose() {

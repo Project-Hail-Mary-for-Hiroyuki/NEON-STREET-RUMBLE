@@ -218,6 +218,12 @@ function run() {
   ok(src.includes('e.code === "Escape") game.togglePause()'), "Escape key is pause");
   ok(!src.includes('e.code === "KeyE") input.pickupPressed = true'), "E key no longer picks up weapons");
   ok(html.includes('id="fullscreen-btn"'), "mobile fullscreen button exists");
+  ok(src.includes('fighter: "bat"'), "fighter visibly carries bat");
+  ok(src.includes('ninja: "sword"'), "ninja visibly carries sword");
+  ok(src.includes('robot: "hammer"'), "robot visibly carries hammer");
+  ok(src.includes('kungfu: "nunchaku"'), "kungfu visibly carries nunchaku");
+  ok(src.includes('midboss: "staff"'), "midboss visibly carries staff");
+  ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
   for (const kind of ["ninja", "robot", "kungfu", "drone"]) {
