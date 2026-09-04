@@ -2506,6 +2506,44 @@ function applyWeaponToAttack(d, currentWeapon) {
   };
 }
 
+/* HUD用: 装備武器で地上コンボの実ダメージがどこまで上がるかを表示する。 */
+function getWeaponAttackSummary(type) {
+  const spec = WEAPON_SPECS[type];
+  if (!spec) return null;
+  const ground = PLAYER_ATTACKS.filter(a => !a.air);
+  const bare = ground.map(a => a.dmg);
+  const armed = ground.map(a => Math.max(a.dmg, spec.dmg));
+  return {
+    min: Math.min(...armed), max: Math.max(...armed),
+    bareMin: Math.min(...bare), bareMax: Math.max(...bare)
+  };
+}
+
+/* 装備中の武器をプレイヤーの前手に重ねて描画する。ドロップ武器と同じ絵を再利用。 */
+function drawEquippedWeapon(player, g) {
+  if (!player.currentWeapon) return;
+  const spec = WEAPON_SPECS[player.currentWeapon];
+  if (!spec || !spec.renderFunc) return;
+
+  const attacking = player.state === "attack" && player.attackData && player.attackData.weaponType;
+  const attackP = attacking ? clamp(player.stateTime / Math.max(0.001, player.attackData.dur), 0, 1) : 0;
+  const swing = attacking ? lerp(-0.9, 0.75, clamp(attackP * 1.35, 0, 1)) : -0.18;
+  const handX = player.x + player.facing * 20 * g.scale;
+  const handY = g.groundY - player.z - 28 * g.scale;
+  const weaponScale = g.scale * (attacking ? 0.40 : 0.35);
+  const gripY = { bat: 30, sword: 50, hammer: 34, nunchaku: -2, staff: 24 }[player.currentWeapon] || 25;
+
+  ctx.save();
+  ctx.translate(handX, handY);
+  ctx.scale(player.facing * weaponScale, weaponScale);
+  ctx.rotate(swing);
+  ctx.translate(0, -gripY);
+  ctx.shadowColor = spec.color;
+  ctx.shadowBlur = 9;
+  spec.renderFunc(ctx);
+  ctx.restore();
+}
+
 class Player {
   constructor(game) {
     this.game = game;
@@ -2552,8 +2590,11 @@ class Player {
   pickupWeapon(type) {
     if (!this.inventory[type]) this.inventory[type] = 0;
     this.inventory[type]++;
-    /* 装備中でない場合のみ自動装備(仕様: 拾っても上書きしない) */
-    if (!this.currentWeapon) this.equipWeapon(type);
+    /* 拾った武器は即装備。別武器を装備中なら在庫へ戻して持ち替える。 */
+    if (this.currentWeapon === type) return false;
+    if (this.currentWeapon) this.inventory[this.currentWeapon] = (this.inventory[this.currentWeapon] || 0) + 1;
+    this.equipWeapon(type);
+    return true;
   }
 
   /* 武器を装備する(inventoryから1個消費) */
@@ -2785,6 +2826,7 @@ class Player {
       color: col, pose: this.pose(), jointColor: "#9fe6ff",
       robot: false, kind: "hero", flash: flashing, windup: 0
     });
+    drawEquippedWeapon(this, g);
   }
 
   pose() {
@@ -3751,9 +3793,10 @@ class Game {
     const durEl = el.weaponDur;
     if (this.player.currentWeapon && WEAPON_SPECS[this.player.currentWeapon]) {
       const spec = WEAPON_SPECS[this.player.currentWeapon];
-      weaponEl.textContent = spec.displayName;
+      const atk = getWeaponAttackSummary(this.player.currentWeapon);
+      weaponEl.textContent = spec.displayName + (atk ? "  ATK " + atk.min + (atk.max !== atk.min ? "–" + atk.max : "") : "");
       const dur = this.player.weaponDurability;
-      durEl.textContent = "耐久 " + dur;
+      durEl.textContent = "耐久 " + dur + (atk ? "  (素手 " + atk.bareMin + "–" + atk.bareMax + ")" : "");
       durEl.style.color = dur <= 2 ? "#ff6b5e" : "#8dffd8";
     } else {
       weaponEl.textContent = "--";

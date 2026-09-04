@@ -200,8 +200,8 @@ function ok(cond, msg) {
 function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX };", sandbox);
-  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, PickupWeapon, KungFu, Drone } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, getWeaponAttackSummary };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -299,6 +299,14 @@ function run() {
   game.player.inventory.staff = 1;
   game.player.equipWeapon("staff");
   ok(game.player.currentWeapon === "staff", "staff weapon equips");
+
+  /* 拾った別武器は即座に持ち替え、ATK表示用の実ダメージも上がる */
+  game.player.pickupWeapon("sword");
+  ok(game.player.currentWeapon === "sword", "newly picked different weapon auto-equips");
+  ok(game.player.inventory.staff >= 1, "previous equipped weapon returns to inventory on auto-equip");
+  const swordAtk = getWeaponAttackSummary("sword");
+  ok(swordAtk.min === 18 && swordAtk.max === 18, "sword ground attack damage is visibly 18");
+  ok(src.includes("drawEquippedWeapon(this, g);"), "equipped weapon is rendered on player");
 
   /* 6a. Pキー拾得 + 実ゲームの拾得半径（以前の28pxでは拾えなかった距離） */
   game.start();
