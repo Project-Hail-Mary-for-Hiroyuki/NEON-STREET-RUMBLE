@@ -551,7 +551,7 @@
     box-shadow: 0 0 12px rgba(120,255,180,0.25);
   }
   /* 拾う・武器切替: 攻撃の左隣にまとめてクラスタ化 */
-  #touch-ui .b-pickup, #touch-ui .b-switch, #touch-ui .b-guard {
+  #touch-ui .b-pickup, #touch-ui .b-switch, #touch-ui .b-guard, #touch-ui .b-craft {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
@@ -606,6 +606,19 @@
   }
   #touch-ui .b-guard:active, #touch-ui .b-guard.active { filter: brightness(1.55); transform: scale(0.94); }
 
+  #touch-ui .b-craft {
+    right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
+    bottom: max(140px, calc(env(safe-area-inset-bottom, 0px) + 128px));
+    width: 60px; height: 44px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #ffd58a;
+    border: 2px solid rgba(255,190,90,0.55);
+    background: rgba(55,32,10,0.48);
+    box-shadow: 0 0 12px rgba(255,180,70,0.28);
+  }
+  #touch-ui .b-craft:active, #touch-ui .b-craft.active { filter: brightness(1.55); transform: scale(0.94); }
+
   /* ---- スマホ(横持ち): 画面が低いのでボタンを小さくして画面を隠さない ---- */
   @media (orientation: landscape) and (max-height: 500px) {
     #touch-ui .b-atk {
@@ -636,6 +649,12 @@
       right: max(130px, calc(env(safe-area-inset-right, 0px) + 122px));
       bottom: max(44px, calc(env(safe-area-inset-bottom, 0px) + 34px));
       width: 42px; height: 42px;
+      font-size: 9px;
+    }
+    #touch-ui .b-craft {
+      right: max(130px, calc(env(safe-area-inset-right, 0px) + 122px));
+      bottom: max(92px, calc(env(safe-area-inset-bottom, 0px) + 82px));
+      width: 42px; height: 34px;
       font-size: 9px;
     }
     /* 横持ちではレバーも小型化 */
@@ -678,6 +697,7 @@
     #touch-ui .b-pickup { width: 72px; height: 72px; font-size: 12px; }
     #touch-ui .b-switch { width: 60px; height: 60px; font-size: 12px; }
     #touch-ui .b-guard { width: 62px; height: 62px; font-size: 12px; }
+    #touch-ui .b-craft { width: 60px; height: 44px; font-size: 11px; }
     /* 武器スロット5種を縦持ちで収めるため小型化 */
     #weapon-slots { bottom: 10px; gap: 4px; }
     #weapon-slots .wslot { min-width: 40px; padding: 3px 5px; font-size: 8px; }
@@ -707,6 +727,11 @@
       position: absolute;
       right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
       bottom: max(72px, calc(env(safe-area-inset-bottom, 0px) + 60px));
+    }
+    #touch-ui .b-craft {
+      position: absolute;
+      right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
+      bottom: max(140px, calc(env(safe-area-inset-bottom, 0px) + 128px));
     }
   }
   /* ---- overlays ---- */
@@ -932,6 +957,7 @@
         <button class="b-pickup" data-action="pickup" aria-label="拾う">拾う</button>
         <button class="b-switch" data-action="switch" aria-label="武器切替">武器</button>
         <button class="b-guard" data-action="guard" aria-label="防御">防御</button>
+        <button class="b-craft" data-action="craft" aria-label="武器合成">合成</button>
       </div>
 
       <!-- Title -->
@@ -948,6 +974,7 @@
           <span class="k">P</span><span>武器を拾う</span>
           <span class="k">Q</span><span>武器切替</span>
           <span class="k">L</span><span>防御（押している間）</span>
+          <span class="k">C</span><span>武器合成</span>
           <span class="k">ESC</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
@@ -1198,6 +1225,7 @@ class Input {
     this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;   /* 武器切替(Q / スマホ切替ボタン) */
+    this.craftPressed = false;    /* 武器合成(C / スマホ合成ボタン) */
     this.guardHeld = false;       /* 防御(L / スマホ防御ボタン) */
     this.attackRepeat = 0; /* 長押し連続攻撃用タイマー */
     this.attackRepeatDelay = 0.30;
@@ -1208,6 +1236,7 @@ class Input {
     this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;
+    this.craftPressed = false;
   }
   attackTriggered(dt) {
     if (this.attackPressed) return true;
@@ -1226,6 +1255,7 @@ class Input {
     this.attackPressed = this.jumpPressed = this.startPressed = false;
     this.pickupPressed = false;
     this.switchPressed = false;
+    this.craftPressed = false;
     this.attackRepeat = 0;
   }
 }
@@ -1244,6 +1274,7 @@ addEventListener("keydown", e => {
   
   if (e.code === "KeyP") input.pickupPressed = true;
   if (e.code === "KeyQ") input.switchPressed = true;   /* 武器切替 */
+  if (e.code === "KeyC") input.craftPressed = true;    /* 武器合成 */
   if (e.code === "KeyL") input.guardHeld = true;
   if (e.code === "Escape") game.togglePause();   /* ポーズ */
   if (e.code === "Enter" || e.code === "KeyZ") {
@@ -1283,6 +1314,7 @@ function bindTouchBtn(btn, kind) {
     else if (kind === "jump") { input.jumpHeld = true; input.jumpPressed = true; }
     else if (kind === "pickup") input.pickupPressed = true;
     else if (kind === "switch") input.switchPressed = true;
+    else if (kind === "craft") input.craftPressed = true;
     else if (kind === "guard") input.guardHeld = true;
   };
   const off = e => {
@@ -2176,6 +2208,27 @@ const WEAPON_SPECS = {
     }
   }
 };
+
+/* ========================== WEAPON_RECIPES =============================== */
+/* レシピ配列方式。今後はここへ項目を足すだけで隠しレシピ等を追加できる。 */
+const WEAPON_RECIPES = [
+  {
+    id: "nunchaku_basic",
+    inputs: { sword: 2, bat: 2 },
+    output: { type: "nunchaku", count: 1 }
+  }
+];
+function canCraftWeaponRecipe(player, recipe) {
+  return Object.entries(recipe.inputs).every(([type, count]) =>
+    (player.inventory[type] || 0) >= count
+  );
+}
+function craftWeaponRecipe(player, recipe) {
+  if (!canCraftWeaponRecipe(player, recipe)) return false;
+  for (const [type, count] of Object.entries(recipe.inputs)) player.inventory[type] -= count;
+  for (let i = 0; i < recipe.output.count; i++) player.pickupWeapon(recipe.output.type);
+  return true;
+}
 
 /* ========================== Projectile ================================= */
 class Projectile {
@@ -3890,6 +3943,24 @@ class Game {
           }
           this.enemies.splice(i, 1);
         }
+      }
+    }
+    /* 武器切替 (Q / タッチ「武器」ボタン): inventoryにある武器を順送り */
+    if (input.craftPressed) {
+      const p = this.player;
+      const recipe = WEAPON_RECIPES.find(r => canCraftWeaponRecipe(p, r));
+      if (recipe && craftWeaponRecipe(p, recipe)) {
+        const made = WEAPON_SPECS[recipe.output.type].displayName;
+        this.effects.popText(p.x, depthInfo().groundY - 92 * CHAR_SCALE, 0,
+          "CRAFT! " + made, "#ffd58a", 22, 0.78);
+        this.effects.spark(p.x, depthInfo().groundY - 48 * CHAR_SCALE, 0,
+          WEAPON_SPECS[recipe.output.type].color, 20, 280);
+        this.hitstop = Math.max(this.hitstop, 0.08);
+        sfx("pickup", 0.34);
+      } else {
+        this.effects.text(p.x, depthInfo().groundY - 88 * CHAR_SCALE, 0,
+          "素材: 刀×2 + バット×2", "#ffd58a");
+        sfx("ui", 0.16);
       }
     }
     /* 武器切替 (Q / タッチ「武器」ボタン): inventoryにある武器を順送り */

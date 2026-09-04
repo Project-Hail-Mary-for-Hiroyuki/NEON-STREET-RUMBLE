@@ -201,8 +201,8 @@ function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const html = fs.readFileSync("index.html", "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, getWeaponAttackSummary };", sandbox);
-  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -224,6 +224,8 @@ function run() {
   ok(src.includes('kungfu: "nunchaku"'), "kungfu visibly carries nunchaku");
   ok(src.includes('midboss: "staff"'), "midboss visibly carries staff");
   ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
+  ok(src.includes('e.code === "KeyC") input.craftPressed = true'), "C key is weapon craft");
+  ok(html.includes('data-action="craft"'), "mobile craft button exists");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
   for (const kind of ["ninja", "robot", "kungfu", "drone"]) {
@@ -328,6 +330,22 @@ function run() {
   const swordAtk = getWeaponAttackSummary("sword");
   ok(swordAtk.min === 18 && swordAtk.max === 18, "sword ground attack damage is visibly 18");
   ok(src.includes("drawEquippedWeapon(this, g);"), "equipped weapon is rendered on player");
+
+  /* 6.1 武器合成: 刀2 + バット2 -> ヌンチャク1。装備中武器は素材に数えない。 */
+  game.start();
+  const craftRecipe = WEAPON_RECIPES[0];
+  game.player.inventory.sword = 2;
+  game.player.inventory.bat = 2;
+  ok(craftRecipe.inputs.sword === 2 && craftRecipe.inputs.bat === 2,
+    "craft recipe requires sword x2 + bat x2");
+  ok(craftRecipe.output.type === "nunchaku" && craftRecipe.output.count === 1,
+    "craft recipe outputs nunchaku x1");
+  ok(canCraftWeaponRecipe(game.player, craftRecipe), "craft recipe detects enough materials");
+  ok(craftWeaponRecipe(game.player, craftRecipe), "craft recipe succeeds");
+  ok(game.player.inventory.sword === 0 && game.player.inventory.bat === 0,
+    "craft consumes sword/bat materials");
+  ok(game.player.currentWeapon === "nunchaku", "crafted nunchaku auto-equips");
+  ok(!canCraftWeaponRecipe(game.player, craftRecipe), "craft recipe fails after materials are consumed");
 
   /* 6a. Pキー拾得 + 実ゲームの拾得半径（以前の28pxでは拾えなかった距離） */
   game.start();
