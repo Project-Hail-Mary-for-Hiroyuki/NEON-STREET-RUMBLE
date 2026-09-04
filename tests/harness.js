@@ -279,6 +279,12 @@ function run() {
   input.attackPressed = true;
   frame(sandbox, game, 1 / 60);
   ok(game.player.attackData && game.player.attackData.name === "flykick", "air attack -> flykick");
+  const flykickRef = game.player.attackData;
+  input.attackHeld = true;
+  step(sandbox, game, 1 / 60, 12);
+  ok(game.player.attackData === flykickRef || game.player.z === 0, "air attack does not restart while attack is held");
+  input.attackHeld = false;
+  ok(flykickRef.dmg === 12 && flykickRef.reach === 115, "flykick trial is toned down to dmg 12 / reach 115");
 
   /* 6. 武器ピックアップ(既存 + 新武器 nunchaku/staff) */
   game.start();
@@ -338,6 +344,27 @@ function run() {
   game.player.hurt(20, game.player.x + 50);
   ok(game.player.state === "guard", "holding guard enters guard state");
   ok(game.player.hp === hpBeforeGuard - 4, "guard reduces frontal 20 damage to 4 chip damage");
+
+  /* 6a-4. 接近戦が数回続くと敵がいったん後退して間合いを作る */
+  game.start();
+  const retreatEnemy = game.enemies[0];
+  retreatEnemy.robot = false;
+  retreatEnemy.exchangeCount = 0;
+  retreatEnemy.registerExchange();
+  retreatEnemy.registerExchange();
+  retreatEnemy.registerExchange();
+  ok(retreatEnemy.retreatTimer > 0, "enemy starts retreat after several close exchanges");
+  const retreatX = retreatEnemy.x;
+  game.player.x = retreatX - 30;
+  retreatEnemy.update(0.2);
+  ok(retreatEnemy.x > retreatX, "enemy retreats away from player to reset spacing");
+
+  /* 6a-5. 近接擬音は同位置に重ならず別レーンへ散る */
+  game.effects.reset();
+  game.effects.popText(400, 300, 0, "バシッ!", "#fff");
+  game.effects.popText(400, 300, 0, "ドガッ!", "#fff");
+  ok(game.effects.texts.length === 2 && game.effects.texts[0].x !== game.effects.texts[1].x,
+    "onomatopoeia pop text uses separated lanes");
 
   /* 6b. 新敵クラスを生成・撃破できる */
   game.enemies.length = 0;

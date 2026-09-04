@@ -1793,7 +1793,15 @@ class HitEffect {
     this.texts.push({ x, y, depth: yDepth, str, color, t: 0, max: 0.85, size: 13, pop: false, rot: 0 });
   }
   popText(x, y, yDepth, str, color, size = 24, max = 0.62) {
-    this.texts.push({ x, y, depth: yDepth, str, color, t: 0, max, size, pop: true, rot: rand(-0.10, 0.10) });
+    /* 近い擬音を別レーンへ散らし、文字同士が重ならないようにする。 */
+    const nearby = this.texts.filter(t => t.pop && Math.abs(t.x - x) < 150 && Math.abs(t.y - y) < 95 && t.t < 0.38);
+    const lane = nearby.length % 5;
+    const xOffsets = [0, -72, 72, -126, 126];
+    const yOffsets = [0, -28, -24, -52, -48];
+    this.texts.push({
+      x: x + xOffsets[lane], y: y + yOffsets[lane], depth: yDepth, str, color,
+      t: 0, max, size, pop: true, rot: rand(-0.07, 0.07), driftX: xOffsets[lane] * 0.10
+    });
   }
   hit(x, y, yDepth, color) {
     const c1 = color || "#ffffff";
@@ -1815,16 +1823,16 @@ class HitEffect {
   /* 飛び蹴りの青いエネルギー */
   flyEnergy(x, y, yDepth, facing) {
     const base = facing > 0 ? 0 : Math.PI;
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 6; i++) {
       const ang = base + rand(-0.85, 0.85);
-      const sp = rand(150, 340);
+      const sp = rand(120, 250);
       this.particles.push({
         x, y, depth: yDepth, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
-        life: 0, maxLife: rand(0.16, 0.34), color: "#4ad2ff",
-        size: rand(2, 4), gravity: 0, shape: "spark", spin: rand(0, TAU), spinV: rand(-8, 8)
+        life: 0, maxLife: rand(0.13, 0.26), color: "#4ad2ff",
+        size: rand(1.5, 3), gravity: 0, shape: "spark", spin: rand(0, TAU), spinV: rand(-8, 8)
       });
     }
-    this.ring(x, y, yDepth, "#4ad2ff", 36);
+    this.ring(x, y, yDepth, "#4ad2ff", 24);
   }
   /* アッパーカットの上昇する青いエネルギー (2D化により使用停止) */
 
@@ -1842,6 +1850,7 @@ class HitEffect {
       const t = this.texts[i];
       t.t += dt;
       t.y -= 38 * dt;
+      if (t.driftX) t.x += t.driftX * dt;
       if (t.t >= t.max) this.texts.splice(i, 1);
     }
     for (let i = this.trails.length - 1; i >= 0; i--) {
@@ -2475,7 +2484,7 @@ const PLAYER_ATTACKS = [
   { name: "punch2",  dur: 0.30, activeStart: 0.10, activeEnd: 0.21, reach: 110, dmg: 9,  kb: 7,  sfx: "punch" },
   { name: "kick",    dur: 0.40, activeStart: 0.14, activeEnd: 0.30, reach: 132, dmg: 14, kb: 16, sfx: "kick" },
   { name: "spinKick", dur: 0.50, activeStart: 0.15, activeEnd: 0.40, reach: 140, dmg: 16, kb: 20, sfx: "kick" },
-  { name: "flykick", dur: 0.62, activeStart: 0.05, activeEnd: 0.55, reach: 135, dmg: 17, kb: 22, sfx: "kick", air: true }
+  { name: "flykick", dur: 0.58, activeStart: 0.06, activeEnd: 0.44, reach: 115, dmg: 12, kb: 14, sfx: "kick", air: true }
 ];
 
 /* 装備中の武器パラメータ(dmg/range)を攻撃データへ反映する(B-1 案A)。
@@ -2750,6 +2759,8 @@ class Player {
 
   startAttack() {
     if (!this.alive || this.state === "dead" || this.state === "guard" || input.guardHeld) return;
+    /* 飛び蹴りは1ジャンプにつき1回だけ。長押しリピートで空中攻撃を再始動しない。 */
+    if (this.state === "jump" && this.attackData && this.attackData.air) return;
     let idx;
     if (this.z > 5 || this.state === "jump") idx = 4;          /* 空中攻撃 = 飛び蹴り */
     else { idx = this.comboStep; this.comboStep = (this.comboStep + 1) % 4; }
@@ -2776,6 +2787,7 @@ class Player {
 
   hurt(dmg, fromX) {
     if (this.invincible > 0 || !this.alive) return;
+    this.game.noteExchangeFrom(fromX);
     const incomingDir = fromX > this.x ? 1 : -1;
     const blocking = this.state === "guard" && this.z <= 0 && incomingDir === this.facing;
     if (blocking) {
@@ -2915,6 +2927,8 @@ class Enemy {
     this.attackCooldown = rand(0.3, 0.9);
     this.windupProgress = 0;
     this.sightDist = 520;
+    this.exchangeCount = 0;
+    this.retreatTimer = 0;
   }
 
   reset(x, y) {
@@ -2924,6 +2938,7 @@ class Enemy {
     this.flash = 0; this.hitstun = 0; this.knockVx = 0;
     this.alive = true; this.deathTime = 0;
     this.attackCooldown = rand(0.3, 0.9);
+    this.exchangeCount = 0; this.retreatTimer = 0;
   }
 
   update(dt) {
@@ -2941,6 +2956,20 @@ class Enemy {
 
     const p = this.game.player;
     if (!p.alive) return;
+
+    /* 数回攻撃が交錯したら敵側がいったん間合いを外す。プレイヤー操作は奪わない。 */
+    if (this.retreatTimer > 0) {
+      this.retreatTimer -= dt;
+      const away = this.x >= p.x ? 1 : -1;
+      this.facing = p.x > this.x ? 1 : -1;
+      this.x += away * Math.max(165, this.speed * 1.05) * dt;
+      if (this.retreatTimer <= 0) {
+        this.attackCooldown = Math.max(this.attackCooldown, 0.75);
+        this.setState("recover");
+      }
+      this.x = clamp(this.x, -80, W + 80);
+      return;
+    }
 
     switch (this.state) {
       case "idle": {
@@ -2988,8 +3017,19 @@ class Enemy {
   onAttackActive(dt) {}
   doAttack() {}
 
+  registerExchange() {
+    if (!this.alive || this.type === "drone") return;
+    this.exchangeCount++;
+    const threshold = this.robot ? 4 : 3;
+    if (this.exchangeCount >= threshold) {
+      this.exchangeCount = 0;
+      this.retreatTimer = this.robot ? 0.58 : 0.72;
+    }
+  }
+
   hurt(dmg, knockX) {
     if (!this.alive) return;
+    this.registerExchange();
     this.hp = Math.max(0, this.hp - dmg);
     this.flash = 0.1;
     this.hitstun = Math.max(this.hitstun, this.robot ? 0.3 : 0.18);
@@ -3547,6 +3587,17 @@ class Game {
 
   toggleMute() { muted = !muted; }
 
+  /* プレイヤーが被弾/防御した側でも「攻撃の交錯」を1回として数える。 */
+  noteExchangeFrom(fromX) {
+    let nearest = null, best = Infinity;
+    for (const e of this.enemies) {
+      if (!e.alive || e.type === "drone") continue;
+      const d = Math.abs(e.x - fromX);
+      if (d < best) { best = d; nearest = e; }
+    }
+    if (nearest && best < 190) nearest.registerExchange();
+  }
+
   /* 攻撃ヒット時の共通処理: HP減算 + エフェクト + コンボ + スコア */
   onAttackHit(e, dmg, knock, hy, hx, attackData) {
     const data = attackData || {};
@@ -3839,8 +3890,12 @@ class Game {
         this.update(dt);
         this.render();
 
-        /* プレイヤー入力 */
-        if (input.attackTriggered(dt)) this.player.startAttack();
+        /* プレイヤー入力: 地上は長押しコンボ可。空中は押した瞬間だけ反応する。 */
+        if (this.player.z > 0 || this.player.state === "jump") {
+          if (input.attackPressed) this.player.startAttack();
+        } else if (input.attackTriggered(dt)) {
+          this.player.startAttack();
+        }
         if (input.jumpPressed) this.player.jump();
       }
     } else if (this.state === "title") {
