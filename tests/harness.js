@@ -236,6 +236,12 @@ function run() {
     "settings screen has sound and difficulty controls");
   ok(DIFFICULTY_MODES.easy.dmg < 1 && DIFFICULTY_MODES.hard.dmg > 1,
     "settings difficulty has easy/normal/hard combat profiles");
+  ok(typeof game.startCinematic === "function", "game exposes cinematic camera cue");
+  game.startCinematic(1, 1.1, 30);
+  ok(game.cinematicTimer === 1 && game.cinematicZoomTarget === 1.1 && game.cinematicBarsTarget === 30,
+    "cinematic cue stores zoom and letterbox targets");
+  ok(src.includes("Math.sin(Math.PI * clamp(cineProgress, 0, 1))"),
+    "cinematic camera eases in and out instead of snapping");
   ok(src.includes("requestFullscreen") && src.includes("webkitRequestFullscreen"), "fullscreen API includes standard + webkit fallback");
   ok(html.includes("viewport-fit=cover") && html.includes("apple-mobile-web-app-capable"), "mobile fullscreen safe-area/PWA meta is present");
   for (const kind of ["ninja", "robot", "kungfu", "drone"]) {

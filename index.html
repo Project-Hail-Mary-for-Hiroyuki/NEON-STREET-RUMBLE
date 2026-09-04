@@ -3941,12 +3941,23 @@ class Game {
     this.areaWeaponDropped = false;
     this.areaTransitionDelay = 0;
     this.messageTimer = 0;
+    this.cinematicTimer = 0;
+    this.cinematicDuration = 0;
+    this.cinematicZoomTarget = 1;
+    this.cinematicBarsTarget = 0;
   }
 
   showStageMessage(text, seconds = 2) {
     el.stageMessage.textContent = text;
     el.stageMessage.classList.add("show");
     this.messageTimer = seconds;
+  }
+
+  startCinematic(duration = 0.7, zoom = 1.05, bars = 0) {
+    this.cinematicDuration = Math.max(0.01, duration);
+    this.cinematicTimer = this.cinematicDuration;
+    this.cinematicZoomTarget = Math.max(1, zoom);
+    this.cinematicBarsTarget = Math.max(0, bars);
   }
 
   makeStageEnemy(spec) {
@@ -4012,6 +4023,7 @@ class Game {
         buildBackground(stageTheme(this.stageIndex));
         this.startArea(0);
         this.showStageMessage(STAGES[this.stageIndex].name + " START", 2.2);
+        this.startCinematic(0.82, 1.05, 18);
         resetBgm(this.stageIndex);
         sfx("stage", 0.18);
         return;
@@ -4039,6 +4051,7 @@ class Game {
     this.enemies.push(boss);
     el.stage.textContent = stage.name + " · MID BOSS";
     this.showStageMessage("WARNING · " + stage.boss.displayName, 2.5);
+    this.startCinematic(1.05, 1.09, 34);
     sfx("warning", 0.22);
   }
 
@@ -4061,9 +4074,12 @@ class Game {
     this.stageIndex = 0;
     this.areaIndex = 0; this.areaLocked = true; this.areaResolved = false;
     this.areaScroll = 0; this.cameraX = 0; this.autoScroll = false; this.bossActive = false;
+    this.cinematicTimer = 0; this.cinematicDuration = 0;
+    this.cinematicZoomTarget = 1; this.cinematicBarsTarget = 0;
     buildBackground(STAGES[0].theme);
     resetBgm(0);
     this.startArea(0);
+    this.startCinematic(0.72, 1.04, 0);
     input.reset();
     el.title.classList.remove("show");
     el.gameover.classList.remove("show");
@@ -4269,6 +4285,7 @@ class Game {
       this.messageTimer -= dt;
       if (this.messageTimer <= 0) el.stageMessage.classList.remove("show");
     }
+    if (this.cinematicTimer > 0) this.cinematicTimer = Math.max(0, this.cinematicTimer - dt);
 
     /* 戦闘中の敵 = プレイヤーに最も近い敵 */
     this.nearestEnemy = null;
@@ -4322,6 +4339,11 @@ class Game {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
 
+    const cineProgress = this.cinematicTimer > 0 && this.cinematicDuration > 0
+      ? 1 - this.cinematicTimer / this.cinematicDuration : 0;
+    const cineStrength = this.cinematicTimer > 0 ? Math.sin(Math.PI * clamp(cineProgress, 0, 1)) : 0;
+    const cameraZoom = 1 + (this.cinematicZoomTarget - 1) * cineStrength;
+
     const par = clamp((this.player.x - W / 2) / (W / 2), -1, 1) * 14;
     const worldScroll = this.cameraX % W;
     const drawTiled = (image, offset) => {
@@ -4330,6 +4352,11 @@ class Game {
       ctx.drawImage(image, x + W, 0);
     };
     ctx.save();
+    if (cameraZoom !== 1) {
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(cameraZoom, cameraZoom);
+      ctx.translate(-W / 2, -H / 2);
+    }
     drawTiled(bgFar, worldScroll * 0.12);
     drawTiled(bgMid, worldScroll * 0.34 + par * 0.7);
     const signOffset = worldScroll * 0.48 + par * 0.7;
@@ -4372,6 +4399,13 @@ class Game {
     ctx.stroke();
 
     ctx.restore();
+
+    if (cineStrength > 0 && this.cinematicBarsTarget > 0) {
+      const barH = this.cinematicBarsTarget * cineStrength;
+      ctx.fillStyle = `rgba(0,0,0,${0.82 * cineStrength})`;
+      ctx.fillRect(0, 0, W, barH);
+      ctx.fillRect(0, H - barH, W, barH);
+    }
 
     /* HUD */
     el.timer.textContent = this.state === "playing" || this.state === "gameover" ? fmtTime(this.time) : "00:00";
