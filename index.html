@@ -1216,6 +1216,24 @@ const STAGES = [
   }
 ];
 
+/* 通常敵のステージ進行。Stage 1は既存バランスを完全維持し、後半だけ緩やかに強化する。
+   ボスはSTAGES側ですでに専用のhp/dmg/speedを持つため、この倍率は適用しない。 */
+const STAGE_DIFFICULTY = [
+  { hp: 1.00, dmg: 1.00, speed: 1.00, windup: 1.00, recover: 1.00, score: 1.00 },
+  { hp: 1.10, dmg: 1.08, speed: 1.05, windup: 0.96, recover: 0.96, score: 1.15 },
+  { hp: 1.22, dmg: 1.25, speed: 1.09, windup: 0.92, recover: 0.92, score: 1.30 }
+];
+function applyStageDifficulty(enemy, stageIndex) {
+  const d = STAGE_DIFFICULTY[stageIndex] || STAGE_DIFFICULTY[STAGE_DIFFICULTY.length - 1];
+  enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * d.hp));
+  enemy.dmg = Math.max(1, Math.round(enemy.dmg * d.dmg));
+  enemy.speed = Math.max(1, Math.round(enemy.speed * d.speed));
+  enemy.windupTime = Math.max(0.12, enemy.windupTime * d.windup);
+  enemy.recoverTime = Math.max(0.2, enemy.recoverTime * d.recover);
+  enemy.score = Math.max(1, Math.round(enemy.score * d.score));
+  return enemy;
+}
+
 /* ============================== Input =================================== */
 class Input {
   constructor() {
@@ -3716,6 +3734,7 @@ class Game {
       case "drone": e = new Drone(this); break;
       default: e = new StreetFighter(this);
     }
+    applyStageDifficulty(e, this.stageIndex);
     e.reset(spec.x, spec.y === undefined ? 0.5 : spec.y);
     return e;
   }

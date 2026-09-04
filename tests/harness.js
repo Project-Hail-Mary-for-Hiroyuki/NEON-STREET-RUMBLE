@@ -201,8 +201,8 @@ function run() {
   const src = fs.readFileSync(GAME_SRC, "utf8");
   const html = fs.readFileSync("index.html", "utf8");
   const sandbox = buildSandbox();
-  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
-  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
+  vm.runInContext(src + "\n;globalThis.__expose = { game, input, Player, Enemy, KungFu, Drone, PickupWeapon, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, applyStageDifficulty, canCraftWeaponRecipe, craftWeaponRecipe, getWeaponAttackSummary };", sandbox);
+  const { game, input, WEAPON_SPECS, WEAPON_HIT_FX, WEAPON_RECIPES, STAGE_DIFFICULTY, canCraftWeaponRecipe, craftWeaponRecipe, PickupWeapon, KungFu, Drone, getWeaponAttackSummary } = sandbox.__expose;
   sandbox.__expose.W = sandbox.__expose.game;
 
   /* キーdownを記録するフック(実際のwindow addEventListenerをスタブしているため) */
@@ -367,6 +367,25 @@ function run() {
   for (const e of game.enemies) if (e.alive) e.hurt(9999, 0);
   step(sandbox, game, 1 / 60, 120);
   ok(game.droppedWeapons.length > 0, "stage 2 encounter guarantees at least one weapon drop");
+
+  /* 6a-2b. 通常敵はStage 1を基準にStage 2/3で段階的に強化される */
+  game.stageIndex = 0;
+  const diffS1 = game.makeStageEnemy({ type: "fighter", x: 700 });
+  game.stageIndex = 1;
+  const diffS2 = game.makeStageEnemy({ type: "fighter", x: 700 });
+  game.stageIndex = 2;
+  const diffS3 = game.makeStageEnemy({ type: "fighter", x: 700 });
+  ok(STAGE_DIFFICULTY[0].hp === 1 && STAGE_DIFFICULTY[0].dmg === 1,
+    "stage 1 difficulty preserves base stats");
+  ok(diffS1.maxHp < diffS2.maxHp && diffS2.maxHp < diffS3.maxHp,
+    "enemy HP scales up each stage");
+  ok(diffS1.dmg < diffS2.dmg && diffS2.dmg < diffS3.dmg,
+    "enemy damage scales up each stage");
+  ok(diffS1.speed < diffS2.speed && diffS2.speed < diffS3.speed,
+    "enemy speed scales up each stage");
+  ok(diffS1.score < diffS2.score && diffS2.score < diffS3.score,
+    "higher stages award more enemy score");
+  game.stageIndex = 0;
 
   /* 6a-3. 防御: 正面からの被ダメージを80%軽減する */
   game.start();
