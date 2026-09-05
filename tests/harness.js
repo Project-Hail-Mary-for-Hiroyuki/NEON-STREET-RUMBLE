@@ -226,6 +226,10 @@ function run() {
   ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
   ok(src.includes('e.code === "KeyC") input.craftPressed = true'), "C key is weapon craft");
   ok(html.includes('data-action="craft"'), "mobile craft button exists");
+  ok(src.includes('e.code === "KeyI") input.specialPressed = true'), "I key triggers contextual special move");
+  ok(html.includes('data-action="special"'), "mobile contextual special button exists");
+  ok(src.includes('name: "uppercut"') && src.includes('name: "dashstrike"') && src.includes('name: "aircombo"'),
+    "uppercut, dash strike, and air combo are defined");
   ok(BGM_PATTERNS.length === 3, "stage-specific BGM has three patterns");
   ok(BGM_PATTERNS[0].bpm < BGM_PATTERNS[1].bpm && BGM_PATTERNS[1].bpm < BGM_PATTERNS[2].bpm,
     "BGM tempo rises by stage");
@@ -420,6 +424,34 @@ function run() {
   game.player.hurt(20, game.player.x + 50);
   ok(game.player.state === "guard", "holding guard enters guard state");
   ok(game.player.hp === hpBeforeGuard - 4, "guard reduces frontal 20 damage to 4 chip damage");
+
+  /* 6a-3b. 状況対応特殊技: 停止=アッパー / 移動=突進 / 空中=3連蹴り */
+  input.reset();
+  game.start();
+  game.player.vx = 0;
+  ok(game.player.startSpecial(), "context special starts from neutral");
+  ok(game.player.attackData && game.player.attackData.name === "uppercut", "neutral special = uppercut");
+
+  game.start();
+  input.right = true;
+  ok(game.player.startSpecial(), "context special starts while moving");
+  ok(game.player.attackData && game.player.attackData.name === "dashstrike", "moving special = dash strike");
+  ok(game.player.attackData.speed >= 480, "dash strike has forward burst speed");
+
+  game.start();
+  game.player.jump();
+  game.player.z = 30;
+  input.reset();
+  ok(game.player.startSpecial(), "context special starts in air");
+  ok(game.player.attackData && game.player.attackData.name === "aircombo", "air special = air combo");
+  ok(game.player.attackData.multiHitTimes.length === 3, "air combo has three kick hit timings");
+
+  game.start();
+  input.guardHeld = true;
+  game.player.update(1 / 60);
+  ok(game.player.state === "guard", "guard pose remains active before special attempt");
+  ok(!game.player.startSpecial(), "guard blocks special activation");
+  input.guardHeld = false;
 
   /* 6a-4. 接近戦が数回続くと敵がいったん後退して間合いを作る */
   game.start();

@@ -551,7 +551,7 @@
     box-shadow: 0 0 12px rgba(120,255,180,0.25);
   }
   /* 拾う・武器切替: 攻撃の左隣にまとめてクラスタ化 */
-  #touch-ui .b-pickup, #touch-ui .b-switch, #touch-ui .b-guard, #touch-ui .b-craft {
+  #touch-ui .b-pickup, #touch-ui .b-switch, #touch-ui .b-guard, #touch-ui .b-craft, #touch-ui .b-special {
     position: absolute;
     z-index: 3;
     pointer-events: auto;
@@ -619,6 +619,19 @@
   }
   #touch-ui .b-craft:active, #touch-ui .b-craft.active { filter: brightness(1.55); transform: scale(0.94); }
 
+  #touch-ui .b-special {
+    right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
+    bottom: max(196px, calc(env(safe-area-inset-bottom, 0px) + 184px));
+    width: 60px; height: 60px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #c7a8ff;
+    border: 2px solid rgba(180,140,255,0.6);
+    background: rgba(34,18,60,0.5);
+    box-shadow: 0 0 14px rgba(165,110,255,0.32);
+  }
+  #touch-ui .b-special:active, #touch-ui .b-special.active { filter: brightness(1.6); transform: scale(0.94); }
+
   /* ---- スマホ(横持ち): 画面が低いのでボタンを小さくして画面を隠さない ---- */
   @media (orientation: landscape) and (max-height: 500px) {
     #touch-ui .b-atk {
@@ -655,6 +668,12 @@
       right: max(130px, calc(env(safe-area-inset-right, 0px) + 122px));
       bottom: max(92px, calc(env(safe-area-inset-bottom, 0px) + 82px));
       width: 42px; height: 34px;
+      font-size: 9px;
+    }
+    #touch-ui .b-special {
+      right: max(178px, calc(env(safe-area-inset-right, 0px) + 170px));
+      bottom: max(74px, calc(env(safe-area-inset-bottom, 0px) + 64px));
+      width: 44px; height: 44px;
       font-size: 9px;
     }
     /* 横持ちではレバーも小型化 */
@@ -698,6 +717,7 @@
     #touch-ui .b-switch { width: 60px; height: 60px; font-size: 12px; }
     #touch-ui .b-guard { width: 62px; height: 62px; font-size: 12px; }
     #touch-ui .b-craft { width: 60px; height: 44px; font-size: 11px; }
+    #touch-ui .b-special { width: 62px; height: 62px; font-size: 12px; }
     /* 武器スロット5種を縦持ちで収めるため小型化 */
     #weapon-slots { bottom: 10px; gap: 4px; }
     #weapon-slots .wslot { min-width: 40px; padding: 3px 5px; font-size: 8px; }
@@ -732,6 +752,11 @@
       position: absolute;
       right: max(176px, calc(env(safe-area-inset-right, 0px) + 166px));
       bottom: max(140px, calc(env(safe-area-inset-bottom, 0px) + 128px));
+    }
+    #touch-ui .b-special {
+      position: absolute;
+      right: max(246px, calc(env(safe-area-inset-right, 0px) + 236px));
+      bottom: max(104px, calc(env(safe-area-inset-bottom, 0px) + 92px));
     }
   }
   /* ---- overlays ---- */
@@ -1006,6 +1031,7 @@
         <button class="b-switch" data-action="switch" aria-label="武器切替">武器</button>
         <button class="b-guard" data-action="guard" aria-label="防御">防御</button>
         <button class="b-craft" data-action="craft" aria-label="武器合成">合成</button>
+        <button class="b-special" data-action="special" aria-label="特殊技">技</button>
       </div>
 
       <!-- Title -->
@@ -1022,6 +1048,7 @@
           <span class="k">P</span><span>武器を拾う</span>
           <span class="k">Q</span><span>武器切替</span>
           <span class="k">L</span><span>防御（押している間）</span>
+          <span class="k">I</span><span>技（停止=アッパー / 移動=突進 / 空中=連続蹴り）</span>
           <span class="k">C</span><span>武器合成</span>
           <span class="k">ESC</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
@@ -1356,6 +1383,7 @@ class Input {
     this.switchPressed = false;   /* 武器切替(Q / スマホ切替ボタン) */
     this.craftPressed = false;    /* 武器合成(C / スマホ合成ボタン) */
     this.guardHeld = false;       /* 防御(L / スマホ防御ボタン) */
+    this.specialPressed = false;    /* 状況対応特殊技(I / スマホ技ボタン) */
     this.attackRepeat = 0; /* 長押し連続攻撃用タイマー */
     this.attackRepeatDelay = 0.30;
   }
@@ -1366,6 +1394,7 @@ class Input {
     this.pickupPressed = false;
     this.switchPressed = false;
     this.craftPressed = false;
+    this.specialPressed = false;
   }
   attackTriggered(dt) {
     if (this.attackPressed) return true;
@@ -1385,6 +1414,7 @@ class Input {
     this.pickupPressed = false;
     this.switchPressed = false;
     this.craftPressed = false;
+    this.specialPressed = false;
     this.attackRepeat = 0;
   }
 }
@@ -1405,6 +1435,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyQ") input.switchPressed = true;   /* 武器切替 */
   if (e.code === "KeyC") input.craftPressed = true;    /* 武器合成 */
   if (e.code === "KeyL") input.guardHeld = true;
+  if (e.code === "KeyI") input.specialPressed = true;
   if (e.code === "Escape") game.togglePause();   /* ポーズ */
   if (e.code === "Enter" || e.code === "KeyZ") {
     if (game.state === "playing" && game.paused) game.togglePause();
@@ -1445,6 +1476,7 @@ function bindTouchBtn(btn, kind) {
     else if (kind === "switch") input.switchPressed = true;
     else if (kind === "craft") input.craftPressed = true;
     else if (kind === "guard") input.guardHeld = true;
+    else if (kind === "special") input.specialPressed = true;
   };
   const off = e => {
     if (activePointer !== e.pointerId) return;
@@ -2949,7 +2981,10 @@ const PLAYER_ATTACKS = [
   { name: "punch2",  dur: 0.30, activeStart: 0.10, activeEnd: 0.21, reach: 110, dmg: 9,  kb: 7,  sfx: "punch" },
   { name: "kick",    dur: 0.40, activeStart: 0.14, activeEnd: 0.30, reach: 132, dmg: 14, kb: 16, sfx: "kick" },
   { name: "spinKick", dur: 0.50, activeStart: 0.15, activeEnd: 0.40, reach: 140, dmg: 16, kb: 20, sfx: "kick" },
-  { name: "flykick", dur: 0.58, activeStart: 0.06, activeEnd: 0.44, reach: 115, dmg: 12, kb: 14, sfx: "kick", air: true }
+  { name: "flykick", dur: 0.58, activeStart: 0.06, activeEnd: 0.44, reach: 115, dmg: 12, kb: 14, sfx: "kick", air: true },
+  { name: "uppercut", dur: 0.42, activeStart: 0.09, activeEnd: 0.23, reach: 108, dmg: 15, kb: 27, sfx: "punch", special: true },
+  { name: "dashstrike", dur: 0.36, activeStart: 0.06, activeEnd: 0.29, reach: 122, dmg: 13, kb: 20, sfx: "kick", speed: 500, special: true },
+  { name: "aircombo", dur: 0.44, activeStart: 0.07, activeEnd: 0.32, reach: 106, dmg: 6, kb: 7, sfx: "kick", air: true, special: true, multiHitTimes: [0.08, 0.18, 0.29] }
 ];
 
 /* 装備中の武器パラメータ(dmg/range)を攻撃データへ反映する(B-1 案A)。
@@ -2984,7 +3019,7 @@ function applyWeaponToAttack(d, currentWeapon) {
 function getWeaponAttackSummary(type) {
   const spec = WEAPON_SPECS[type];
   if (!spec) return null;
-  const ground = PLAYER_ATTACKS.filter(a => !a.air);
+  const ground = PLAYER_ATTACKS.filter(a => !a.air && !a.special);
   const bare = ground.map(a => a.dmg);
   const armed = ground.map(a => Math.max(a.dmg, spec.dmg));
   return {
@@ -3215,6 +3250,13 @@ class Player {
       const active = this.stateTime >= d.activeStart && this.stateTime <= d.activeEnd;
       if (active) {
         this.doAttackHitbox(d);
+        if (d.name === "uppercut" && !d.fxDone) {
+          d.fxDone = true;
+          const g = depthInfo();
+          this.game.effects.ring(this.x + this.facing * 18, g.groundY - 72 * g.scale, 0, "#bca8ff", 44);
+          this.game.effects.spark(this.x + this.facing * 20, g.groundY - 72 * g.scale, 0, "#d6c8ff", 12, 230);
+          this.game.effects.popText(this.x, g.groundY - 108 * g.scale, 0, "UPPER!", "#d6c8ff", 20, 0.48);
+        }
         /* 攻撃中の青い残像 */
         if (this.trailTimer <= 0) {
           this.trailTimer = 0.025;
@@ -3226,12 +3268,24 @@ class Player {
         if (this.state === "attack") this.state = "idle";
       }
     }
-    if (this.attackData && this.attackData.air && !this.attackData.done) {
-      this.attackData.done = true;
-      this.doAttackHitbox(this.attackData);
-      /* 飛び蹴り発動時の青いエネルギー */
-      const g = depthInfo();
-      this.game.effects.flyEnergy(this.x + this.facing * 20, g.groundY - 70 * g.scale, undefined, this.facing);
+    if (this.attackData && this.attackData.air) {
+      const d = this.attackData;
+      if (d.multiHitTimes) {
+        d.hitIndex = d.hitIndex || 0;
+        while (d.hitIndex < d.multiHitTimes.length && this.stateTime >= d.multiHitTimes[d.hitIndex]) {
+          this.hitSet = new Set();
+          this.doAttackHitbox(d);
+          const g = depthInfo();
+          this.game.effects.spark(this.x + this.facing * 28, g.groundY - this.z - 42, 0, "#8dffd8", 7, 180);
+          d.hitIndex++;
+        }
+      } else if (!d.done) {
+        d.done = true;
+        this.doAttackHitbox(d);
+        /* 飛び蹴り発動時の青いエネルギー */
+        const g = depthInfo();
+        this.game.effects.flyEnergy(this.x + this.facing * 20, g.groundY - 70 * g.scale, undefined, this.facing);
+      }
     }
   }
 
@@ -3277,7 +3331,38 @@ class Player {
     sfx(d.sfx);
   }
 
-  
+
+
+  /* I / スマホ「技」: 状況に応じて3種類を使い分ける。 */
+  startSpecial() {
+    if (!this.alive || this.state === "dead" || this.state === "guard" || input.guardHeld) return false;
+    let d = null;
+    if (this.z > 5 || this.state === "jump") {
+      d = PLAYER_ATTACKS.find(a => a.name === "aircombo");
+      if (!d) return false;
+      this.state = "jump";
+      this.stateTime = 0;
+      this.attackData = { ...d, done: false, hitIndex: 0 };
+      this.hitSet = new Set();
+      this.vx = this.facing * 185;
+      this.jumpVy = Math.max(this.jumpVy, 70);
+    } else {
+      if (this.state !== "idle" && this.state !== "run") return false;
+      const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+      if (dir) this.facing = dir;
+      const moving = dir !== 0 || Math.abs(this.vx) > 90;
+      d = PLAYER_ATTACKS.find(a => a.name === (moving ? "dashstrike" : "uppercut"));
+      if (!d) return false;
+      this.state = "attack";
+      this.stateTime = 0;
+      this.attackData = { ...d, done: false, fxDone: false };
+      this.hitSet = new Set();
+      if (d.speed) this.vx = this.facing * d.speed;
+      else this.vx *= 0.25;
+    }
+    sfx(d.sfx, 0.30);
+    return true;
+  }
 
   jump() {
     if (!this.alive || this.state === "dead" || this.state === "jump" || this.state === "guard" || input.guardHeld) return;
@@ -3363,10 +3448,18 @@ class Player {
       };
     }
     if (this.state === "guard") {
-      return { ...base, lean: -0.08, armFA: 0.92, armFB: 0.16, armBA: 0.7, armBB: 0.2, legFA: 0.28, legBA: -0.28 };
+      const brace = Math.sin(this.game.time * 8) * 0.025;
+      return { ...base, lean: -0.14 + brace, armFA: 1.08, armFB: -0.08, armBA: 0.92, armBB: -0.04, legFA: 0.38, legFB: 0.22, legBA: -0.42, legBB: 0.28 };
     }
     if (this.state === "attack" && this.attackData) {
       const d = this.attackData, t = this.stateTime;
+      if (d.name === "uppercut") {
+        const ext = clamp((t - d.activeStart + 0.05) / 0.16, 0, 1);
+        return { ...base, lean: -0.12, armFA: 1.45, armFB: -0.45 - ext * 0.35, armBA: -0.85, armBB: 0.15, legFA: 0.22, legBA: -0.35 };
+      }
+      if (d.name === "dashstrike") {
+        return { ...base, lean: 0.58, armFA: 1.38, armFB: 0.02, armBA: -1.0, armBB: 0.1, legFA: 0.65, legFB: 0.1, legBA: -0.65, legBB: 0.25 };
+      }
       if (d.name === "punch1" || d.name === "punch2") {
         const ext = clamp((t - d.activeStart) / (d.activeEnd - d.activeStart + 0.001), 0, 1);
         const a = lerp(0.5, 1.15, ext);
@@ -3382,6 +3475,10 @@ class Player {
     }
     if (this.state === "jump") {
       if (this.attackData && this.attackData.air) {
+        if (this.attackData.name === "aircombo") {
+          const phase = Math.sin(this.stateTime * 38);
+          return { ...base, lean: 0.38, legFA: phase > 0 ? 1.35 : 0.35, legFB: -0.12, legBA: phase > 0 ? 0.25 : 1.35, legBB: -0.1, armFA: -0.9, armFB: 0.12, armBA: -0.75, armBB: 0.12 };
+        }
         return { ...base, lean: 0.7, legFA: 1.2, legFB: -0.08, legBA: 1.1, legBB: -0.1, armFA: -0.8, armFB: 0.1, armBA: -1.1, armBB: 0.15 };
       }
       return { ...base, legFA: 0.5, legFB: 0.5, legBA: -0.5, legBB: 0.5, armFA: -0.7, armFB: 0.4, armBA: 0.7, armBB: 0.4 };
@@ -4462,7 +4559,9 @@ class Game {
         this.update(dt);
         this.render();
 
-        /* プレイヤー入力: 地上は長押しコンボ可。空中は押した瞬間だけ反応する。 */
+        /* プレイヤー入力: I/技ボタンは状況対応の特殊技を最優先。 */
+        if (input.specialPressed) this.player.startSpecial();
+        /* 地上は長押しコンボ可。空中は押した瞬間だけ反応する。 */
         if (this.player.z > 0 || this.player.state === "jump") {
           if (input.attackPressed) this.player.startAttack();
         } else if (input.attackTriggered(dt)) {
