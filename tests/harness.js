@@ -224,6 +224,11 @@ function run() {
   ok(src.includes('kungfu: "nunchaku"'), "kungfu visibly carries nunchaku");
   ok(src.includes('midboss: "staff"'), "midboss visibly carries staff");
   ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
+  ok(src.includes('const weaponScale = g.scale * (active ? 0.40 : 0.35);'),
+    "enemy held weapons use the same scale as player weapons");
+  const enemyWeaponBlock = src.slice(src.indexOf("function drawEnemyHeldWeapon"), src.indexOf("class Player"));
+  ok(!enemyWeaponBlock.includes("CHARACTER_RENDER_SCALE") && !enemyWeaponBlock.includes("enemy.scaleBias"),
+    "enemy weapon size does not grow with enemy character scale");
   const touchBlock = html.match(/<div id="touch-ui">[\s\S]*?<\/div>\s*<!-- Title -->/);
   const touchActions = touchBlock ? [...touchBlock[0].matchAll(/data-action="([^"]+)"/g)].map(m => m[1]) : [];
   ok(touchActions.length === 3 && touchActions.includes("jump") && touchActions.includes("attack") && touchActions.includes("guard"),

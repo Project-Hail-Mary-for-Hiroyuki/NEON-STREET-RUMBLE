@@ -3056,17 +3056,18 @@ function drawEnemyHeldWeapon(enemy, g, opacity = 1) {
   const spec = WEAPON_SPECS[type];
   if (!type || !spec || !spec.renderFunc) return;
 
-  const actorScale = g.scale * enemy.scaleBias * CHARACTER_RENDER_SCALE;
+  /* 敵武器もプレイヤーと同じ実寸感で描画する。
+     敵キャラ側の拡大率には追従させず、武器だけ巨大化しない。 */
   const active = enemy.state === "attack";
   const winding = enemy.state === "windup";
   const attackP = active ? clamp(enemy.stateTime / Math.max(0.001, enemy.attackTime), 0, 1) : 0;
   const windP = winding ? clamp(enemy.windupProgress || 0, 0, 1) : 0;
   const swing = active
-    ? lerp(-0.85, 0.72, attackP)
+    ? lerp(-0.9, 0.75, clamp(attackP * 1.35, 0, 1))
     : winding ? lerp(-0.18, -0.72, windP) : -0.18;
-  const handX = enemy.x + enemy.facing * 18 * actorScale;
-  const handY = g.groundY - enemy.z - 27 * actorScale;
-  const weaponScale = actorScale * (active ? 0.36 : 0.32);
+  const handX = enemy.x + enemy.facing * 20 * g.scale;
+  const handY = g.groundY - enemy.z - 28 * g.scale;
+  const weaponScale = g.scale * (active ? 0.40 : 0.35);
   const gripY = { bat: 30, sword: 50, hammer: 34, nunchaku: -2, staff: 24 }[type] || 25;
 
   ctx.save();
@@ -3076,7 +3077,7 @@ function drawEnemyHeldWeapon(enemy, g, opacity = 1) {
   ctx.rotate(swing);
   ctx.translate(0, -gripY);
   ctx.shadowColor = spec.color;
-  ctx.shadowBlur = active ? 10 : 5;
+  ctx.shadowBlur = 9;
   spec.renderFunc(ctx);
   ctx.restore();
 }
