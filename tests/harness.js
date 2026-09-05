@@ -214,9 +214,9 @@ function run() {
   vm.runInContext("", sandbox);
 
   console.log("== smoke test ==");
-  ok(src.includes('e.code === "KeyP") input.pickupPressed = true'), "P key is pickup");
   ok(src.includes('e.code === "Escape") game.togglePause()'), "Escape key is pause");
-  ok(!src.includes('e.code === "KeyE") input.pickupPressed = true'), "E key no longer picks up weapons");
+  ok(!src.includes('input.pickupPressed') && !src.includes('input.switchPressed') && !src.includes('input.craftPressed'),
+    "manual pickup/switch/craft inputs are removed");
   ok(html.includes('id="fullscreen-btn"'), "mobile fullscreen button exists");
   ok(src.includes('fighter: "bat"'), "fighter visibly carries bat");
   ok(src.includes('ninja: "sword"'), "ninja visibly carries sword");
@@ -224,10 +224,13 @@ function run() {
   ok(src.includes('kungfu: "nunchaku"'), "kungfu visibly carries nunchaku");
   ok(src.includes('midboss: "staff"'), "midboss visibly carries staff");
   ok(src.includes("drawEnemyHeldWeapon(this, g, alpha)"), "enemy render draws held weapon");
-  ok(src.includes('e.code === "KeyC") input.craftPressed = true'), "C key is weapon craft");
-  ok(html.includes('data-action="craft"'), "mobile craft button exists");
-  ok(src.includes('e.code === "KeyI") input.specialPressed = true'), "I key triggers contextual special move");
-  ok(html.includes('data-action="special"'), "mobile contextual special button exists");
+  const touchBlock = html.match(/<div id="touch-ui">[\s\S]*?<\/div>\s*<!-- Title -->/);
+  const touchActions = touchBlock ? [...touchBlock[0].matchAll(/data-action="([^"]+)"/g)].map(m => m[1]) : [];
+  ok(touchActions.length === 3 && touchActions.includes("jump") && touchActions.includes("attack") && touchActions.includes("guard"),
+    "mobile controls are exactly jump/attack/guard");
+  ok(!src.includes('e.code === "KeyP"') && !src.includes('e.code === "KeyQ"') &&
+    !src.includes('e.code === "KeyC"') && !src.includes('e.code === "KeyI"'),
+    "manual weapon/special keyboard shortcuts are removed");
   ok(src.includes('name: "uppercut"') && src.includes('name: "dashstrike"') && src.includes('name: "aircombo"'),
     "uppercut, dash strike, and air combo are defined");
   ok(BGM_PATTERNS.length === 3, "stage-specific BGM has three patterns");
@@ -295,33 +298,33 @@ function run() {
   ok(WEAPON_HIT_FX.hammer.word === "ドゴォン!!" && WEAPON_HIT_FX.hammer.hitstop > WEAPON_HIT_FX.sword.hitstop,
     "hammer has distinctive heavy feedback");
 
-  /* 4. 攻撃・コンボ (punch1->punch2->kick->spinKick) */
+  /* 4. 攻撃連打: 基本4段からアッパー・突進へ自然に派生 */
   game.start();
   for (const e of game.enemies) e.hurt(9999, 0);   /* 敵を排除し干渉を防ぐ */
-  const names = ["punch1", "punch2", "kick", "spinKick"];
+  const names = ["punch1", "punch2", "kick", "spinKick", "uppercut", "dashstrike"];
   let seqOk = true;
   game.player.comboStep = 0;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < names.length; i++) {
     input.attackPressed = true;
-    frame(sandbox, game, 1 / 60);                  /* frame内で1回だけ startAttack */
+    frame(sandbox, game, 1 / 60);
     if (!game.player.attackData || game.player.attackData.name !== names[i]) seqOk = false;
-    step(sandbox, game, 1 / 60, 40);               /* 攻撃モーション完了まで待機 */
+    step(sandbox, game, 1 / 60, 40);
   }
-  ok(seqOk, "combo order = punch1->punch2->kick->spinKick");
-  ok(game.player.comboStep === 0, "comboStep wraps back to 0 (4-hit loop)");
+  ok(seqOk, "attack mash chains basic combo -> uppercut -> dash strike");
+  ok(game.player.comboStep === 0, "comboStep wraps after six-hit natural combo");
 
   /* 5. ジャンプ + 攻撃 = flykick */
   input.jumpPressed = true;
   frame(sandbox, game, 1 / 60);
   input.attackPressed = true;
   frame(sandbox, game, 1 / 60);
-  ok(game.player.attackData && game.player.attackData.name === "flykick", "air attack -> flykick");
+  ok(game.player.attackData && game.player.attackData.name === "flykick", "first air attack -> flykick");
   const flykickRef = game.player.attackData;
-  input.attackHeld = true;
-  step(sandbox, game, 1 / 60, 12);
-  ok(game.player.attackData === flykickRef || game.player.z === 0, "air attack does not restart while attack is held");
-  input.attackHeld = false;
-  ok(flykickRef.dmg === 12 && flykickRef.reach === 115, "flykick trial is toned down to dmg 12 / reach 115");
+  ok(flykickRef.dmg === 12 && flykickRef.reach === 115, "flykick remains dmg 12 / reach 115");
+  input.attackPressed = true;
+  frame(sandbox, game, 1 / 60);
+  ok(game.player.attackData && game.player.attackData.name === "aircombo", "second air attack naturally upgrades to air combo");
+  ok(game.player.attackData.multiHitTimes.length === 3, "air combo has three kick timings");
 
   /* 6. 武器ピックアップ(既存 + 新武器 nunchaku/staff) */
   game.start();
@@ -330,9 +333,8 @@ function run() {
     vx: 0, vz: 0, z: 0, rotation: 0, rotationSpeed: 0, gravity: 0,
     update() {}, render() {}
   });
-  input.pickupPressed = true;
   game.update(1 / 60);
-  ok(game.player.currentWeapon === "bat", "pickup weapon equips it");
+  ok(game.player.currentWeapon === "bat", "nearby weapon auto-pickup equips it");
   const allWeaponTypes = Object.keys(WEAPON_SPECS);
   ok(allWeaponTypes.indexOf("nunchaku") >= 0 && allWeaponTypes.indexOf("staff") >= 0, "WEAPON_SPECS includes nunchaku/staff");
   game.player.inventory.nunchaku = 1;
@@ -351,7 +353,7 @@ function run() {
   ok(swordAtk.min === 18 && swordAtk.max === 18, "sword ground attack damage is visibly 18");
   ok(src.includes("drawEquippedWeapon(this, g);"), "equipped weapon is rendered on player");
 
-  /* 6.1 武器合成: 刀2 + バット2 -> ヌンチャク1。装備中武器は素材に数えない。 */
+  /* 6.1 武器合成: 刀2 + バット2 -> ヌンチャク1。装備中も素材として数える。 */
   game.start();
   const craftRecipe = WEAPON_RECIPES[0];
   game.player.inventory.sword = 2;
@@ -367,16 +369,29 @@ function run() {
   ok(game.player.currentWeapon === "nunchaku", "crafted nunchaku auto-equips");
   ok(!canCraftWeaponRecipe(game.player, craftRecipe), "craft recipe fails after materials are consumed");
 
-  /* 6a. Pキー拾得 + 実ゲームの拾得半径（以前の28pxでは拾えなかった距離） */
+  game.start();
+  game.player.inventory.sword = 1;
+  game.player.inventory.bat = 2;
+  game.player.currentWeapon = "sword";
+  game.player.weaponDurability = 5;
+  ok(canCraftWeaponRecipe(game.player, craftRecipe), "equipped weapon counts toward automatic evolution recipe");
+
+  game.start();
+  game.player.inventory.sword = 2;
+  game.player.inventory.bat = 2;
+  game.update(1 / 60);
+  ok(game.player.currentWeapon === "nunchaku", "game update automatically evolves materials into nunchaku");
+  ok(game.player.inventory.sword === 0 && game.player.inventory.bat === 0, "automatic evolution consumes recipe materials");
+
+  /* 6a. 近づくだけで自動取得し、Pキー操作は不要 */
   game.start();
   game.droppedWeapons.length = 0;
   const nearbyWeapon = new PickupWeapon(game, "bat", game.player.x + 60, 0);
   nearbyWeapon.z = 0; nearbyWeapon.vz = 0; nearbyWeapon.vx = 0;
   game.droppedWeapons.push(nearbyWeapon);
-  input.pickupPressed = true;
   game.update(1 / 60);
-  ok(game.player.currentWeapon === "bat", "pickup radius allows nearby dropped weapon");
-  ok(src.includes('if (e.code === "KeyP") input.pickupPressed = true;'), "P key is mapped to weapon pickup");
+  ok(game.player.currentWeapon === "bat", "auto pickup collects nearby dropped weapon");
+  ok(game.droppedWeapons.length === 0, "auto pickup removes collected drop from ground");
   ok(src.includes('if (e.code === "Escape") game.togglePause();'), "Escape key is mapped to pause");
 
   /* 6a-2. 後半ステージでも遭遇ごとに最低1個は武器が落ちる */
@@ -425,32 +440,18 @@ function run() {
   ok(game.player.state === "guard", "holding guard enters guard state");
   ok(game.player.hp === hpBeforeGuard - 4, "guard reduces frontal 20 damage to 4 chip damage");
 
-  /* 6a-3b. 状況対応特殊技: 停止=アッパー / 移動=突進 / 空中=3連蹴り */
-  input.reset();
-  game.start();
-  game.player.vx = 0;
-  ok(game.player.startSpecial(), "context special starts from neutral");
-  ok(game.player.attackData && game.player.attackData.name === "uppercut", "neutral special = uppercut");
-
-  game.start();
-  input.right = true;
-  ok(game.player.startSpecial(), "context special starts while moving");
-  ok(game.player.attackData && game.player.attackData.name === "dashstrike", "moving special = dash strike");
-  ok(game.player.attackData.speed >= 480, "dash strike has forward burst speed");
-
-  game.start();
-  game.player.jump();
-  game.player.z = 30;
-  input.reset();
-  ok(game.player.startSpecial(), "context special starts in air");
-  ok(game.player.attackData && game.player.attackData.name === "aircombo", "air special = air combo");
-  ok(game.player.attackData.multiHitTimes.length === 3, "air combo has three kick hit timings");
-
+  /* 6a-3b. 防御+ジャンプでバク転。攻撃技は専用ボタンなし。 */
   game.start();
   input.guardHeld = true;
   game.player.update(1 / 60);
-  ok(game.player.state === "guard", "guard pose remains active before special attempt");
-  ok(!game.player.startSpecial(), "guard blocks special activation");
+  const backflipStartX = game.player.x;
+  game.player.jump();
+  ok(game.player.state === "backflip", "guard + jump starts backflip");
+  ok(game.player.z > 0 && game.player.vx < 0, "backflip rises and moves backward when facing right");
+  ok(game.player.invincible > 0, "backflip grants a short evade window");
+  step(sandbox, game, 1 / 60, 50);
+  ok(game.player.x < backflipStartX, "backflip creates defensive distance");
+  ok(src.includes('ctx.rotate(-this.facing * p * TAU)'), "backflip visibly rotates the character");
   input.guardHeld = false;
 
   /* 6a-4. 接近戦が数回続くと敵がいったん後退して間合いを作る */

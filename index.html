@@ -1027,11 +1027,7 @@
         </div>
         <button class="b-jump" data-action="jump" aria-label="ジャンプ">ジャンプ</button>
         <button class="b-atk" data-action="attack" aria-label="攻撃">攻撃</button>
-        <button class="b-pickup" data-action="pickup" aria-label="拾う">拾う</button>
-        <button class="b-switch" data-action="switch" aria-label="武器切替">武器</button>
         <button class="b-guard" data-action="guard" aria-label="防御">防御</button>
-        <button class="b-craft" data-action="craft" aria-label="武器合成">合成</button>
-        <button class="b-special" data-action="special" aria-label="特殊技">技</button>
       </div>
 
       <!-- Title -->
@@ -1045,11 +1041,9 @@
           <span class="k">A D / ← →</span><span>移動</span>
           <span class="k">J</span><span>攻撃（連続コンボ）</span>
           <span class="k">K</span><span>ジャンプ（空中でJ=飛び蹴り）</span>
-          <span class="k">P</span><span>武器を拾う</span>
-          <span class="k">Q</span><span>武器切替</span>
-          <span class="k">L</span><span>防御（押している間）</span>
-          <span class="k">I</span><span>技（停止=アッパー / 移動=突進 / 空中=連続蹴り）</span>
-          <span class="k">C</span><span>武器合成</span>
+          <span class="k">L</span><span>防御（L+Kでバク転）</span>
+          <span class="k">AUTO</span><span>武器取得・合成・進化</span>
+          <span class="k">J連打</span><span>コンボから必殺技へ派生</span>
           <span class="k">ESC</span><span>ポーズ</span>
           <span class="k">R</span><span>リスタート</span>
           <span class="k">M</span><span>サウンド オン/オフ</span>
@@ -1379,11 +1373,7 @@ class Input {
     this.attackHeld = false; this.jumpHeld = false;
     this.attackPressed = false; this.jumpPressed = false;
     this.startPressed = false;
-    this.pickupPressed = false;
-    this.switchPressed = false;   /* 武器切替(Q / スマホ切替ボタン) */
-    this.craftPressed = false;    /* 武器合成(C / スマホ合成ボタン) */
     this.guardHeld = false;       /* 防御(L / スマホ防御ボタン) */
-    this.specialPressed = false;    /* 状況対応特殊技(I / スマホ技ボタン) */
     this.attackRepeat = 0; /* 長押し連続攻撃用タイマー */
     this.attackRepeatDelay = 0.30;
   }
@@ -1391,10 +1381,6 @@ class Input {
     this.attackPressed = false;
     this.jumpPressed = false;
     this.startPressed = false;
-    this.pickupPressed = false;
-    this.switchPressed = false;
-    this.craftPressed = false;
-    this.specialPressed = false;
   }
   attackTriggered(dt) {
     if (this.attackPressed) return true;
@@ -1411,10 +1397,6 @@ class Input {
     this.left = this.right = false;
     this.attackHeld = this.jumpHeld = this.guardHeld = false;
     this.attackPressed = this.jumpPressed = this.startPressed = false;
-    this.pickupPressed = false;
-    this.switchPressed = false;
-    this.craftPressed = false;
-    this.specialPressed = false;
     this.attackRepeat = 0;
   }
 }
@@ -1431,11 +1413,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyJ" || e.code === "Space") { input.attackHeld = true; input.attackPressed = true; }
   if (e.code === "KeyK") { input.jumpHeld = true; input.jumpPressed = true; }
   
-  if (e.code === "KeyP") input.pickupPressed = true;
-  if (e.code === "KeyQ") input.switchPressed = true;   /* 武器切替 */
-  if (e.code === "KeyC") input.craftPressed = true;    /* 武器合成 */
   if (e.code === "KeyL") input.guardHeld = true;
-  if (e.code === "KeyI") input.specialPressed = true;
   if (e.code === "Escape") game.togglePause();   /* ポーズ */
   if (e.code === "Enter" || e.code === "KeyZ") {
     if (game.state === "playing" && game.paused) game.togglePause();
@@ -1472,11 +1450,7 @@ function bindTouchBtn(btn, kind) {
     btn.classList.add("active");
     if (kind === "attack") { input.attackHeld = true; input.attackPressed = true; }
     else if (kind === "jump") { input.jumpHeld = true; input.jumpPressed = true; }
-    else if (kind === "pickup") input.pickupPressed = true;
-    else if (kind === "switch") input.switchPressed = true;
-    else if (kind === "craft") input.craftPressed = true;
     else if (kind === "guard") input.guardHeld = true;
-    else if (kind === "special") input.specialPressed = true;
   };
   const off = e => {
     if (activePointer !== e.pointerId) return;
@@ -2411,7 +2385,7 @@ class PickupWeapon {
       ctx.shadowBlur = 10;
       ctx.fillStyle = "#fff";
       ctx.font = "bold " + (playerDist < 90 ? 14 : 10) + "px 'Press Start 2P', monospace";
-      ctx.fillText(playerDist < 90 ? "P 拾う!" : "WEAPON!", rx, ry - 62 * nearScale);
+      ctx.fillText(playerDist < 90 ? "AUTO GET!" : "WEAPON!", rx, ry - 62 * nearScale);
       ctx.restore();
     }
   }
@@ -2493,14 +2467,29 @@ const WEAPON_RECIPES = [
     output: { type: "nunchaku", count: 1 }
   }
 ];
+function weaponCountIncludingEquipped(player, type) {
+  return (player.inventory[type] || 0) + (player.currentWeapon === type ? 1 : 0);
+}
 function canCraftWeaponRecipe(player, recipe) {
   return Object.entries(recipe.inputs).every(([type, count]) =>
-    (player.inventory[type] || 0) >= count
+    weaponCountIncludingEquipped(player, type) >= count
   );
+}
+function consumeWeaponMaterial(player, type, count) {
+  let remaining = count;
+  const fromInventory = Math.min(player.inventory[type] || 0, remaining);
+  player.inventory[type] = (player.inventory[type] || 0) - fromInventory;
+  remaining -= fromInventory;
+  if (remaining > 0 && player.currentWeapon === type) {
+    player.currentWeapon = null;
+    player.weaponDurability = 0;
+    remaining--;
+  }
+  return remaining === 0;
 }
 function craftWeaponRecipe(player, recipe) {
   if (!canCraftWeaponRecipe(player, recipe)) return false;
-  for (const [type, count] of Object.entries(recipe.inputs)) player.inventory[type] -= count;
+  for (const [type, count] of Object.entries(recipe.inputs)) consumeWeaponMaterial(player, type, count);
   for (let i = 0; i < recipe.output.count; i++) player.pickupWeapon(recipe.output.type);
   return true;
 }
@@ -3101,7 +3090,7 @@ class Player {
     this.vx = 0;
     this.facing = 1;
     this.hp = 100; this.maxHp = 100;
-    this.state = "idle";     /* idle | run | guard | attack | jump | dead */
+    this.state = "idle";     /* idle | run | guard | attack | jump | backflip | dead */
     this.stateTime = 0;
     this.anim = 0;
     this.comboStep = 0;
@@ -3110,6 +3099,7 @@ class Player {
     this.invincible = 0;
     this.flash = 0;
     this.jumpVy = 0;
+    this.backflipDuration = 0.58;
     this.alive = true;
     this.deadTimer = 0;
     this.trailTimer = 0;
@@ -3127,7 +3117,7 @@ class Player {
     this.anim = 0; this.comboStep = 0;
     this.attackData = null; this.hitSet = new Set();
     this.invincible = 0; this.flash = 0;
-    this.jumpVy = 0; this.alive = true; this.deadTimer = 0;
+    this.jumpVy = 0; this.backflipDuration = 0.58; this.alive = true; this.deadTimer = 0;
     this.trailTimer = 0;
     this.currentWeapon = null;
     this.weaponDurability = 0;
@@ -3209,6 +3199,13 @@ class Player {
       if (dir !== 0) this.anim += dt * 10;
     } else if (this.state === "guard") {
       this.vx = lerp(this.vx, 0, clamp(dt * 16, 0, 1));
+    } else if (this.state === "backflip") {
+      this.x += this.vx * dt;
+      this.vx = lerp(this.vx, -this.facing * 220, clamp(dt * 3.5, 0, 1));
+      if (this.trailTimer <= 0) {
+        this.trailTimer = 0.028;
+        this.game.effects.ghost(this.trailSnapshot(), 0.26);
+      }
     } else if (this.state === "attack") {
       const spd = this.attackData && this.attackData.speed ? this.attackData.speed : 100;
       this.vx = lerp(this.vx, this.facing * spd, clamp(dt * (spd > 100 ? 2 : 6), 0, 1));
@@ -3231,15 +3228,17 @@ class Player {
     /* 次面への移行は敵全滅後に自動スクロールで行う(キャラはその場に立ち、背景が流れる)。 */
 
     /* --- ジャンプ (Z) --- */
-    if (this.z > 0 || this.state === "jump") {
+    if (this.z > 0 || this.state === "jump" || this.state === "backflip") {
       this.jumpVy -= 1500 * dt;
       this.z += this.jumpVy * dt;
       if (this.z <= 0) {
         this.z = 0;
-        if (this.state === "jump") {
+        if (this.state === "jump" || this.state === "backflip") {
+          const wasBackflip = this.state === "backflip";
           this.attackData = null;
-          this.state = "idle";
-          this.game.effects.smoke(this.x, depthInfo().groundY, undefined, "rgba(160,200,255,0.4)", 3);
+          this.state = input.guardHeld && wasBackflip ? "guard" : "idle";
+          this.stateTime = 0;
+          this.game.effects.smoke(this.x, depthInfo().groundY, undefined, "rgba(160,200,255,0.4)", wasBackflip ? 5 : 3);
         }
       }
     }
@@ -3316,56 +3315,63 @@ class Player {
   }
 
   startAttack() {
-    if (!this.alive || this.state === "dead" || this.state === "guard" || input.guardHeld) return;
-    /* 飛び蹴りは1ジャンプにつき1回だけ。長押しリピートで空中攻撃を再始動しない。 */
-    if (this.state === "jump" && this.attackData && this.attackData.air) return;
-    let idx;
-    if (this.z > 5 || this.state === "jump") idx = 4;          /* 空中攻撃 = 飛び蹴り */
-    else { idx = this.comboStep; this.comboStep = (this.comboStep + 1) % 4; }
+    if (!this.alive || this.state === "dead" || this.state === "guard" || this.state === "backflip" || input.guardHeld) return;
+    if (this.z > 5 || this.state === "jump") {
+      /* 空中で攻撃をもう一度押すと飛び蹴りから3連蹴りへ自然に派生。 */
+      if (this.attackData && this.attackData.name === "flykick") {
+        const air = PLAYER_ATTACKS.find(a => a.name === "aircombo");
+        this.stateTime = 0;
+        this.attackData = { ...air, done: false, hitIndex: 0 };
+        this.hitSet = new Set();
+        this.vx = this.facing * 185;
+        this.jumpVy = Math.max(this.jumpVy, 70);
+        sfx(air.sfx, 0.30);
+        return;
+      }
+      if (this.attackData && this.attackData.air) return;
+      const air = PLAYER_ATTACKS[4];
+      this.state = "jump";
+      this.stateTime = 0;
+      this.attackData = { ...air, done: false };
+      this.hitSet = new Set();
+      this.vx = this.facing * 230;
+      this.jumpVy = Math.max(this.jumpVy, 40);
+      sfx(air.sfx);
+      return;
+    }
+
+    /* 連打コンボ: 4基本技 → アッパー → 突進 → 先頭へ戻る。 */
+    const comboOrder = [0, 1, 2, 3, 5, 6];
+    const idx = comboOrder[this.comboStep % comboOrder.length];
+    this.comboStep = (this.comboStep + 1) % comboOrder.length;
     const d = applyWeaponToAttack(PLAYER_ATTACKS[idx], this.currentWeapon);
-    this.state = d.air ? "jump" : "attack";
+    this.state = "attack";
     this.stateTime = 0;
-    this.attackData = { ...d, done: false };
+    this.attackData = { ...d, done: false, fxDone: false };
     this.hitSet = new Set();
-    if (d.air) { this.vx = this.facing * 230; this.jumpVy = 40; }
+    if (d.speed) this.vx = this.facing * d.speed;
     sfx(d.sfx);
   }
 
-
-
-  /* I / スマホ「技」: 状況に応じて3種類を使い分ける。 */
-  startSpecial() {
-    if (!this.alive || this.state === "dead" || this.state === "guard" || input.guardHeld) return false;
-    let d = null;
-    if (this.z > 5 || this.state === "jump") {
-      d = PLAYER_ATTACKS.find(a => a.name === "aircombo");
-      if (!d) return false;
-      this.state = "jump";
-      this.stateTime = 0;
-      this.attackData = { ...d, done: false, hitIndex: 0 };
-      this.hitSet = new Set();
-      this.vx = this.facing * 185;
-      this.jumpVy = Math.max(this.jumpVy, 70);
-    } else {
-      if (this.state !== "idle" && this.state !== "run") return false;
-      const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-      if (dir) this.facing = dir;
-      const moving = dir !== 0 || Math.abs(this.vx) > 90;
-      d = PLAYER_ATTACKS.find(a => a.name === (moving ? "dashstrike" : "uppercut"));
-      if (!d) return false;
-      this.state = "attack";
-      this.stateTime = 0;
-      this.attackData = { ...d, done: false, fxDone: false };
-      this.hitSet = new Set();
-      if (d.speed) this.vx = this.facing * d.speed;
-      else this.vx *= 0.25;
-    }
-    sfx(d.sfx, 0.30);
+  startBackflip() {
+    if (!this.alive || this.state === "dead" || this.z > 0) return false;
+    this.state = "backflip";
+    this.stateTime = 0;
+    this.attackData = null;
+    this.hitSet = new Set();
+    this.z = 1;
+    this.jumpVy = 520;
+    this.vx = -this.facing * 390;
+    this.invincible = Math.max(this.invincible, 0.42);
+    const g = depthInfo();
+    this.game.effects.ring(this.x, g.groundY - 36, 0, "#9fe6ff", 34);
+    sfx("jump", 0.20);
     return true;
   }
 
   jump() {
-    if (!this.alive || this.state === "dead" || this.state === "jump" || this.state === "guard" || input.guardHeld) return;
+    if (input.guardHeld || this.state === "guard") { this.startBackflip(); return; }
+    if (!this.alive || this.state === "dead" || this.state === "jump" || this.state === "backflip") return;
     this.state = "jump";
     this.stateTime = 0;
     this.attackData = null;
@@ -3422,12 +3428,21 @@ class Player {
     const blink = this.invincible > 0 && Math.floor(this.game.time * 18) % 2 === 0;
     const col = flashing ? "#ffffff" : (blink ? "rgba(120,220,255,0.5)" : "#3ecbff");
     drawShadow(this.x, g.groundY, (0.5 + this.y * 0.9) * CHARACTER_RENDER_SCALE, 0.4);
+    ctx.save();
+    if (this.state === "backflip") {
+      const p = clamp(this.stateTime / this.backflipDuration, 0, 1);
+      const pivotY = sy - 42 * g.scale;
+      ctx.translate(this.x, pivotY);
+      ctx.rotate(-this.facing * p * TAU);
+      ctx.translate(-this.x, -pivotY);
+    }
     drawStick({
       x: this.x, groundY: sy, scale: g.scale * CHARACTER_RENDER_SCALE, facing: this.facing,
       color: col, pose: this.pose(), jointColor: "#9fe6ff",
       robot: false, kind: "hero", flash: flashing, windup: 0
     });
     drawEquippedWeapon(this, g);
+    ctx.restore();
   }
 
   pose() {
@@ -3450,6 +3465,9 @@ class Player {
     if (this.state === "guard") {
       const brace = Math.sin(this.game.time * 8) * 0.025;
       return { ...base, lean: -0.14 + brace, armFA: 1.08, armFB: -0.08, armBA: 0.92, armBB: -0.04, legFA: 0.38, legFB: 0.22, legBA: -0.42, legBB: 0.28 };
+    }
+    if (this.state === "backflip") {
+      return { ...base, lean: -0.18, armFA: -0.9, armFB: 0.45, armBA: 0.9, armBB: 0.45, legFA: 0.55, legFB: 0.72, legBA: -0.55, legBB: 0.72 };
     }
     if (this.state === "attack" && this.attackData) {
       const d = this.attackData, t = this.stateTime;
@@ -4313,57 +4331,41 @@ class Game {
         }
       }
     }
-    /* 武器切替 (Q / タッチ「武器」ボタン): inventoryにある武器を順送り */
-    if (input.craftPressed) {
-      const p = this.player;
-      const recipe = WEAPON_RECIPES.find(r => canCraftWeaponRecipe(p, r));
-      if (recipe && craftWeaponRecipe(p, recipe)) {
+    /* 武器は近づくだけで自動取得。ボタン操作は不要。 */
+    for (let i = this.droppedWeapons.length - 1; i >= 0; i--) {
+      const w = this.droppedWeapons[i];
+      const dx = this.player.x - w.x;
+      const autoRadius = Math.max(82, w.pickupRadius || 0);
+      if (dx * dx < autoRadius * autoRadius && w.z <= 8) {
+        const name = WEAPON_SPECS[w.type].displayName;
+        this.player.pickupWeapon(w.type);
+        this.droppedWeapons.splice(i, 1);
+        const py = depthInfo().groundY - 82 * CHAR_SCALE;
+        this.effects.spark(w.x, py + 35, 0, WEAPON_SPECS[w.type].color, 16, 260);
+        this.effects.ring(w.x, py + 35, 0, WEAPON_SPECS[w.type].color, 54);
+        this.effects.popText(w.x, py, 0, name + " AUTO GET!!", "#ffe76b", 20, 0.64);
+        this.hitstop = Math.max(this.hitstop, 0.05);
+        sfx("pickup", 0.28);
+      }
+    }
+
+    /* 素材が揃ったレシピは即座に自動合成し、完成武器へ進化させる。 */
+    let crafted = true;
+    let craftGuard = 0;
+    while (crafted && craftGuard++ < 8) {
+      crafted = false;
+      const recipe = WEAPON_RECIPES.find(r => canCraftWeaponRecipe(this.player, r));
+      if (recipe && craftWeaponRecipe(this.player, recipe)) {
         const made = WEAPON_SPECS[recipe.output.type].displayName;
-        this.effects.popText(p.x, depthInfo().groundY - 92 * CHAR_SCALE, 0,
-          "CRAFT! " + made, "#ffd58a", 22, 0.78);
-        this.effects.spark(p.x, depthInfo().groundY - 48 * CHAR_SCALE, 0,
-          WEAPON_SPECS[recipe.output.type].color, 20, 280);
-        this.hitstop = Math.max(this.hitstop, 0.08);
-        sfx("pickup", 0.34);
-      } else {
-        this.effects.text(p.x, depthInfo().groundY - 88 * CHAR_SCALE, 0,
-          "素材: 刀×2 + バット×2", "#ffd58a");
-        sfx("ui", 0.16);
-      }
-    }
-    /* 武器切替 (Q / タッチ「武器」ボタン): inventoryにある武器を順送り */
-    if (input.switchPressed) {
-      const p = this.player;
-      const owned = Object.keys(p.inventory).filter(t => p.inventory[t] > 0);
-      if (owned.length > 0) {
-        const curIdx = p.currentWeapon ? owned.indexOf(p.currentWeapon) : -1;
-        const next = owned[(curIdx + 1) % owned.length];
-        if (p.currentWeapon) {
-          /* 現装備(耐久残)をインベントリに戻してから次へ */
-          p.inventory[p.currentWeapon] = (p.inventory[p.currentWeapon] || 0) + 1;
-        }
-        p.equipWeapon(next);
-        this.effects.text(p.x, depthInfo().groundY - 90 * CHAR_SCALE, 0, WEAPON_SPECS[next].displayName + "!", "#8dffd8");
-        sfx("ui");
-      }
-    }
-    /* プレイヤーが武器を拾う (Pキー / タッチ「拾う」ボタン) */
-    if (input.pickupPressed) {
-      for (let i = this.droppedWeapons.length - 1; i >= 0; i--) {
-        const w = this.droppedWeapons[i];
-        const dx = this.player.x - w.x;
-        if (dx * dx < w.pickupRadius * w.pickupRadius) {
-          const name = WEAPON_SPECS[w.type].displayName;
-          this.player.pickupWeapon(w.type);
-          this.droppedWeapons.splice(i, 1);
-          /* 拾得は小さなイベントとして強く見せる。 */
-          const py = depthInfo().groundY - 82 * CHAR_SCALE;
-          this.effects.spark(w.x, py + 35, 0, WEAPON_SPECS[w.type].color, 16, 260);
-          this.effects.ring(w.x, py + 35, 0, WEAPON_SPECS[w.type].color, 54);
-          this.effects.popText(w.x, py, 0, name + " GET!!", "#ffe76b", 22, 0.72);
-          this.hitstop = Math.max(this.hitstop, 0.07);
-          sfx("pickup", 0.34);
-        }
+        this.effects.popText(this.player.x, depthInfo().groundY - 98 * CHAR_SCALE, 0,
+          "EVOLVE! " + made, "#ffd58a", 24, 0.84);
+        this.effects.spark(this.player.x, depthInfo().groundY - 48 * CHAR_SCALE, 0,
+          WEAPON_SPECS[recipe.output.type].color, 24, 310);
+        this.effects.ring(this.player.x, depthInfo().groundY - 48 * CHAR_SCALE, 0,
+          WEAPON_SPECS[recipe.output.type].color, 68);
+        this.hitstop = Math.max(this.hitstop, 0.09);
+        sfx("pickup", 0.38);
+        crafted = true;
       }
     }
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -4559,9 +4561,7 @@ class Game {
         this.update(dt);
         this.render();
 
-        /* プレイヤー入力: I/技ボタンは状況対応の特殊技を最優先。 */
-        if (input.specialPressed) this.player.startSpecial();
-        /* 地上は長押しコンボ可。空中は押した瞬間だけ反応する。 */
+        /* 攻撃連打で基本コンボから特殊技へ自然に派生。 */
         if (this.player.z > 0 || this.player.state === "jump") {
           if (input.attackPressed) this.player.startAttack();
         } else if (input.attackTriggered(dt)) {
